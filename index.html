@@ -128,9 +128,26 @@
     <script>
         class BusDismissalBoard {
             constructor() {
-                this.buses = [];
+                this.buses = this.loadBuses();
                 this.currentView = 'admin';
                 this.init();
+            }
+            
+            loadBuses() {
+                try {
+                    const saved = localStorage.getItem('busDismissalBuses');
+                    return saved ? JSON.parse(saved) : [];
+                } catch (e) {
+                    return [];
+                }
+            }
+            
+            saveBuses() {
+                try {
+                    localStorage.setItem('busDismissalBuses', JSON.stringify(this.buses));
+                } catch (e) {
+                    console.error('Could not save buses to localStorage');
+                }
             }
             
             init() {
@@ -231,6 +248,7 @@
                 
                 this.buses.unshift(newBus);
                 input.value = '';
+                this.saveBuses();
                 this.playNotificationSound(busNumber);
                 this.updateDisplay();
                 this.showNotification(`Bus ${busNumber} added!`, 'success');
@@ -241,6 +259,7 @@
                 if (busIndex > -1) {
                     const busNumber = this.buses[busIndex].number;
                     this.buses.splice(busIndex, 1);
+                    this.saveBuses();
                     this.playSwooshSound();
                     this.updateDisplay();
                     this.showNotification(`Bus ${busNumber} removed!`, 'success');
@@ -439,5 +458,6 @@
         // Initialize the bus dismissal board
         const busBoard = new BusDismissalBoard();
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'991151273107cba6',t:'MTc2MDg4NzgyOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'99116218d5f02abc',t:'MTc2MDg4ODUyMy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
+
