@@ -49,28 +49,12 @@
         <nav class="school-green text-gray-800 p-4 shadow-lg">
             <div class="max-w-6xl mx-auto flex justify-between items-center">
                 <h1 class="text-2xl font-bold">🐊 Bus Dismissal Board</h1>
-                <div class="space-x-4">
-                    <button id="viewerBtn" class="school-gold text-black px-4 py-2 rounded font-semibold hover:school-gold-dark transition-colors">
-                        Viewer Mode
-                    </button>
-                    <button id="adminBtn" class="warm-brown text-white px-4 py-2 rounded font-semibold hover:opacity-90 transition-colors">
-                        Admin Mode
-                    </button>
-                </div>
-            </div>
-        </nav>
-
-        <!-- Admin Screen -->
-        <div id="adminScreen" class="max-w-6xl mx-auto p-6">
-            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-                <h2 class="text-2xl font-bold text-green-800 mb-4">Admin Controls</h2>
-                
-                <div class="flex gap-4 mb-6">
+                <div class="flex gap-4">
                     <input 
                         type="text" 
                         id="busNumberInput" 
                         placeholder="Enter bus number..." 
-                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                     >
                     <button 
                         id="addBusBtn" 
@@ -79,56 +63,50 @@
                         Add Bus
                     </button>
                 </div>
-                
-                <div class="border-t pt-4">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Current Buses:</h3>
-                    <div id="adminBusList" class="space-y-2">
-                        <!-- Admin bus list will be populated here -->
-                    </div>
-                </div>
-                
-                <div class="border-t pt-4 mt-6">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Viewer Link:</h3>
-                    <div class="flex gap-2">
-                        <input 
-                            type="text" 
-                            id="viewerLink" 
-                            readonly 
-                            class="flex-1 px-3 py-2 bg-gray-100 border border-gray-300 rounded text-sm"
-                            value=""
-                        >
-                        <button 
-                            id="copyLinkBtn" 
-                            class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors font-semibold"
-                        >
-                            Copy Link
-                        </button>
-                        <button 
-                            id="openViewerBtn" 
-                            class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors font-semibold"
-                        >
-                            Open Viewer
-                        </button>
-                    </div>
-                    <p class="text-sm text-gray-600 mt-2">Share this link to display the bus board on another screen</p>
-                </div>
-
             </div>
-        </div>
+        </nav>
 
-        <!-- Viewer Screen -->
-        <div id="viewerScreen" class="hidden min-h-full">
+        <!-- Main Display -->
+        <div class="min-h-full">
             <div class="school-green text-gray-800 text-center py-8">
                 <h1 class="text-6xl font-bold mb-4">🐊 BUSES NOW LOADING</h1>
                 <p class="text-2xl">Please listen for your bus number</p>
             </div>
             
-            <div id="viewerBusGrid" class="p-8 grid gap-6 auto-rows-fr">
-                <!-- Viewer bus grid will be populated here -->
+            <div id="busGrid" class="p-8 grid gap-6 auto-rows-fr">
+                <!-- Bus grid will be populated here -->
             </div>
             
-            <div id="noBusesMessage" class="text-center py-20 text-gray-500 text-2xl hidden">
+            <div id="noBusesMessage" class="text-center py-20 text-gray-500 text-2xl">
                 No buses currently loading
+            </div>
+        </div>
+
+        <!-- Passcode Modal -->
+        <div id="passcodeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">Enter Admin Passcode</h2>
+                <input 
+                    type="password" 
+                    id="passcodeInput" 
+                    placeholder="Enter passcode..." 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-center text-lg"
+                >
+                <div class="flex gap-3 mt-6">
+                    <button 
+                        id="cancelPasscodeBtn" 
+                        class="flex-1 bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors font-semibold"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        id="submitPasscodeBtn" 
+                        class="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors font-semibold"
+                    >
+                        Submit
+                    </button>
+                </div>
+                <p class="text-sm text-gray-600 mt-4 text-center">Access expires after 1 hour</p>
             </div>
         </div>
     </div>
@@ -137,7 +115,9 @@
         class BusDismissalBoard {
             constructor() {
                 this.buses = this.loadBuses();
-                this.currentView = 'admin';
+                this.passcode = '1234'; // Default passcode
+                this.adminAccess = false;
+                this.accessExpiry = null;
                 this.init();
             }
             
@@ -158,25 +138,18 @@
                 }
             }
             
+            checkAdminAccess() {
+                if (this.accessExpiry && Date.now() > this.accessExpiry) {
+                    this.adminAccess = false;
+                    this.accessExpiry = null;
+                }
+                return this.adminAccess;
+            }
+            
             init() {
                 this.bindEvents();
-                this.checkURLParams();
-                this.updateViewerLink();
                 this.updateDisplay();
                 this.setupSyncListener();
-            }
-            
-            checkURLParams() {
-                const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get('mode') === 'viewer') {
-                    this.switchView('viewer');
-                }
-            }
-            
-            updateViewerLink() {
-                const baseUrl = window.location.origin + window.location.pathname;
-                const viewerUrl = baseUrl + '?mode=viewer';
-                document.getElementById('viewerLink').value = viewerUrl;
             }
             
             setupSyncListener() {
@@ -199,70 +172,60 @@
             }
             
             bindEvents() {
-                document.getElementById('adminBtn').addEventListener('click', () => this.switchView('admin'));
-                document.getElementById('viewerBtn').addEventListener('click', () => this.switchView('viewer'));
-                document.getElementById('addBusBtn').addEventListener('click', () => this.addBus());
+                document.getElementById('addBusBtn').addEventListener('click', () => this.handleAddBus());
                 document.getElementById('busNumberInput').addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') this.addBus();
+                    if (e.key === 'Enter') this.handleAddBus();
                 });
-                document.getElementById('copyLinkBtn').addEventListener('click', () => this.copyViewerLink());
-                document.getElementById('openViewerBtn').addEventListener('click', () => this.openViewerInNewTab());
-
+                
+                // Passcode modal events
+                document.getElementById('submitPasscodeBtn').addEventListener('click', () => this.submitPasscode());
+                document.getElementById('cancelPasscodeBtn').addEventListener('click', () => this.hidePasscodeModal());
+                document.getElementById('passcodeInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.submitPasscode();
+                });
                 
                 // Update display when window is resized
                 window.addEventListener('resize', () => {
-                    if (this.currentView === 'viewer') {
-                        this.updateViewerGrid();
-                    }
+                    this.updateBusGrid();
                 });
             }
             
-            copyViewerLink() {
-                const linkInput = document.getElementById('viewerLink');
-                linkInput.select();
-                linkInput.setSelectionRange(0, 99999); // For mobile devices
-                
-                try {
-                    document.execCommand('copy');
-                    this.showNotification('Viewer link copied!', 'success');
-                } catch (err) {
-                    // Fallback for modern browsers
-                    navigator.clipboard.writeText(linkInput.value).then(() => {
-                        this.showNotification('Viewer link copied!', 'success');
-                    }).catch(() => {
-                        this.showNotification('Could not copy link', 'error');
-                    });
+            handleAddBus() {
+                if (!this.checkAdminAccess()) {
+                    this.showPasscodeModal();
+                    return;
                 }
+                this.addBus();
             }
             
-            openViewerInNewTab() {
-                const viewerUrl = document.getElementById('viewerLink').value;
-                window.open(viewerUrl, '_blank', 'noopener,noreferrer');
+            showPasscodeModal() {
+                const modal = document.getElementById('passcodeModal');
+                const input = document.getElementById('passcodeInput');
+                modal.classList.remove('hidden');
+                input.focus();
+                input.value = '';
             }
-
             
-            switchView(view) {
-                this.currentView = view;
-                const adminScreen = document.getElementById('adminScreen');
-                const viewerScreen = document.getElementById('viewerScreen');
+            hidePasscodeModal() {
+                const modal = document.getElementById('passcodeModal');
+                modal.classList.add('hidden');
+            }
+            
+            submitPasscode() {
+                const input = document.getElementById('passcodeInput');
+                const enteredCode = input.value.trim();
                 
-                if (view === 'admin') {
-                    adminScreen.classList.remove('hidden');
-                    viewerScreen.classList.add('hidden');
-                    document.getElementById('adminBtn').classList.add('warm-brown', 'text-white');
-                    document.getElementById('adminBtn').classList.remove('school-gold', 'text-black');
-                    document.getElementById('viewerBtn').classList.add('school-gold', 'text-black');
-                    document.getElementById('viewerBtn').classList.remove('warm-brown', 'text-white');
+                if (enteredCode === this.passcode) {
+                    this.adminAccess = true;
+                    this.accessExpiry = Date.now() + (60 * 60 * 1000); // 1 hour from now
+                    this.hidePasscodeModal();
+                    this.addBus();
+                    this.showNotification('Admin access granted for 1 hour!', 'success');
                 } else {
-                    adminScreen.classList.add('hidden');
-                    viewerScreen.classList.remove('hidden');
-                    document.getElementById('viewerBtn').classList.add('warm-brown', 'text-white');
-                    document.getElementById('viewerBtn').classList.remove('school-gold', 'text-black');
-                    document.getElementById('adminBtn').classList.add('school-gold', 'text-black');
-                    document.getElementById('adminBtn').classList.remove('warm-brown', 'text-white');
+                    this.showNotification('Incorrect passcode!', 'error');
+                    input.value = '';
+                    input.focus();
                 }
-                
-                this.updateDisplay();
             }
             
             addBus() {
@@ -387,8 +350,7 @@
             }
             
             updateDisplay() {
-                this.updateAdminList();
-                this.updateViewerGrid();
+                this.updateBusGrid();
                 
                 // Trigger storage event for other tabs/windows
                 window.dispatchEvent(new StorageEvent('storage', {
@@ -398,39 +360,12 @@
                 }));
             }
             
-            updateAdminList() {
-                const adminList = document.getElementById('adminBusList');
-                
-                if (this.buses.length === 0) {
-                    adminList.innerHTML = '<p class="text-gray-500 italic">No buses added yet</p>';
-                    return;
-                }
-                
-                adminList.innerHTML = this.buses.map(bus => `
-                    <div class="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                        <div class="flex items-center space-x-3">
-                            <span class="text-2xl">🐊</span>
-                            <div>
-                                <span class="font-semibold text-lg">Bus ${bus.number}</span>
-                                <p class="text-sm text-gray-500">Added: ${bus.timestamp.toLocaleTimeString()}</p>
-                            </div>
-                        </div>
-                        <button 
-                            onclick="busBoard.removeBus(${bus.id})"
-                            class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition-colors font-semibold"
-                        >
-                            Remove
-                        </button>
-                    </div>
-                `).join('');
-            }
-            
-            updateViewerGrid() {
-                const viewerGrid = document.getElementById('viewerBusGrid');
+            updateBusGrid() {
+                const busGrid = document.getElementById('busGrid');
                 const noBusesMessage = document.getElementById('noBusesMessage');
                 
                 if (this.buses.length === 0) {
-                    viewerGrid.innerHTML = '';
+                    busGrid.innerHTML = '';
                     noBusesMessage.classList.remove('hidden');
                     return;
                 }
@@ -468,13 +403,22 @@
                 const busNumberSize = Math.max(2.5, Math.min(4, cardHeight / 50));
                 const loadingTextSize = Math.max(0.875, Math.min(1.125, cardHeight / 120));
                 
-                viewerGrid.className = `p-8 grid gap-6`;
-                viewerGrid.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
-                viewerGrid.style.height = `${availableHeight}px`;
+                busGrid.className = `p-8 grid gap-6`;
+                busGrid.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+                busGrid.style.height = `${availableHeight}px`;
                 
-                viewerGrid.innerHTML = this.buses.map(bus => `
-                    <div class="school-gold rounded-xl text-center shadow-2xl bus-enter transform hover:scale-105 transition-transform flex flex-col justify-center items-center border-2 border-opacity-20" 
+                busGrid.innerHTML = this.buses.map(bus => `
+                    <div class="school-gold rounded-xl text-center shadow-2xl bus-enter transform hover:scale-105 transition-transform flex flex-col justify-center items-center border-2 border-opacity-20 relative" 
                          style="min-height: ${cardHeight}px; padding: ${Math.max(8, cardHeight * 0.1)}px; border-color: #d4a373;">
+                        ${this.checkAdminAccess() ? `
+                            <button 
+                                onclick="busBoard.removeBus(${bus.id})"
+                                class="absolute top-2 right-2 bg-red-500 text-white w-8 h-8 rounded-full hover:bg-red-600 transition-colors font-bold text-sm"
+                                title="Remove bus"
+                            >
+                                ×
+                            </button>
+                        ` : ''}
                         <div style="font-size: ${busIconSize}rem; margin-bottom: ${Math.max(4, cardHeight * 0.05)}px;">🐊</div>
                         <div class="font-bold" style="font-size: ${busTextSize}rem; margin-bottom: ${Math.max(2, cardHeight * 0.03)}px; color: #6b7280;">BUS</div>
                         <div class="font-black" style="font-size: ${busNumberSize}rem; line-height: 1; color: #374151;">${bus.number}</div>
@@ -501,6 +445,7 @@
         // Initialize the bus dismissal board
         const busBoard = new BusDismissalBoard();
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9911f2d2d4fb2bbd',t:'MTc2MDg5NDQ1MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9912021a67652b5c',t:'MTc2MDg5NTA3Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
+
 
