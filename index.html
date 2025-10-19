@@ -87,6 +87,31 @@
                     </div>
                 </div>
                 
+                <div class="border-t pt-4 mt-6">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Viewer Link:</h3>
+                    <div class="flex gap-2">
+                        <input 
+                            type="text" 
+                            id="viewerLink" 
+                            readonly 
+                            class="flex-1 px-3 py-2 bg-gray-100 border border-gray-300 rounded text-sm"
+                            value=""
+                        >
+                        <button 
+                            id="copyLinkBtn" 
+                            class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors font-semibold"
+                        >
+                            Copy Link
+                        </button>
+                        <button 
+                            id="openViewerBtn" 
+                            class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors font-semibold"
+                        >
+                            Open Viewer
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-2">Share this link to display the bus board on another screen</p>
+                </div>
 
             </div>
         </div>
@@ -149,7 +174,9 @@
             }
             
             updateViewerLink() {
-                // Viewer link functionality removed
+                const baseUrl = window.location.origin + window.location.pathname;
+                const viewerUrl = baseUrl + '?mode=viewer';
+                document.getElementById('viewerLink').value = viewerUrl;
             }
             
             setupSyncListener() {
@@ -178,6 +205,8 @@
                 document.getElementById('busNumberInput').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') this.addBus();
                 });
+                document.getElementById('copyLinkBtn').addEventListener('click', () => this.copyViewerLink());
+                document.getElementById('openViewerBtn').addEventListener('click', () => this.openViewerInNewTab());
 
                 
                 // Update display when window is resized
@@ -188,6 +217,28 @@
                 });
             }
             
+            copyViewerLink() {
+                const linkInput = document.getElementById('viewerLink');
+                linkInput.select();
+                linkInput.setSelectionRange(0, 99999); // For mobile devices
+                
+                try {
+                    document.execCommand('copy');
+                    this.showNotification('Viewer link copied!', 'success');
+                } catch (err) {
+                    // Fallback for modern browsers
+                    navigator.clipboard.writeText(linkInput.value).then(() => {
+                        this.showNotification('Viewer link copied!', 'success');
+                    }).catch(() => {
+                        this.showNotification('Could not copy link', 'error');
+                    });
+                }
+            }
+            
+            openViewerInNewTab() {
+                const viewerUrl = document.getElementById('viewerLink').value;
+                window.open(viewerUrl, '_blank', 'noopener,noreferrer');
+            }
 
             
             switchView(view) {
@@ -450,5 +501,6 @@
         // Initialize the bus dismissal board
         const busBoard = new BusDismissalBoard();
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9911ebda93c1cba6',t:'MTc2MDg5NDE2Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9911f2d2d4fb2bbd',t:'MTc2MDg5NDQ1MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
+
