@@ -86,6 +86,25 @@
                         <!-- Admin bus list will be populated here -->
                     </div>
                 </div>
+                
+                <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                    <h4 class="font-semibold text-blue-800 mb-2">Direct Viewer Link:</h4>
+                    <p class="text-sm text-blue-600 mb-2">Share this link to go directly to viewer mode:</p>
+                    <div class="flex items-center gap-2">
+                        <input 
+                            type="text" 
+                            id="viewerLink" 
+                            readonly 
+                            class="flex-1 px-3 py-2 bg-white border border-blue-200 rounded text-sm"
+                        >
+                        <button 
+                            id="copyLinkBtn" 
+                            class="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 transition-colors"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -116,7 +135,22 @@
             
             init() {
                 this.bindEvents();
+                this.checkURLParams();
+                this.updateViewerLink();
                 this.updateDisplay();
+            }
+            
+            checkURLParams() {
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('mode') === 'viewer') {
+                    this.switchView('viewer');
+                }
+            }
+            
+            updateViewerLink() {
+                const baseUrl = window.location.origin + window.location.pathname;
+                const viewerUrl = baseUrl + '?mode=viewer';
+                document.getElementById('viewerLink').value = viewerUrl;
             }
             
             bindEvents() {
@@ -126,6 +160,7 @@
                 document.getElementById('busNumberInput').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') this.addBus();
                 });
+                document.getElementById('copyLinkBtn').addEventListener('click', () => this.copyViewerLink());
                 
                 // Update display when window is resized
                 window.addEventListener('resize', () => {
@@ -133,6 +168,24 @@
                         this.updateViewerGrid();
                     }
                 });
+            }
+            
+            copyViewerLink() {
+                const linkInput = document.getElementById('viewerLink');
+                linkInput.select();
+                linkInput.setSelectionRange(0, 99999); // For mobile devices
+                
+                try {
+                    document.execCommand('copy');
+                    this.showNotification('Viewer link copied!', 'success');
+                } catch (err) {
+                    // Fallback for modern browsers
+                    navigator.clipboard.writeText(linkInput.value).then(() => {
+                        this.showNotification('Viewer link copied!', 'success');
+                    }).catch(() => {
+                        this.showNotification('Could not copy link', 'error');
+                    });
+                }
             }
             
             switchView(view) {
@@ -386,5 +439,5 @@
         // Initialize the bus dismissal board
         const busBoard = new BusDismissalBoard();
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'99112e9250b02abc',t:'MTc2MDg4NjQxMy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'991151273107cba6',t:'MTc2MDg4NzgyOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
