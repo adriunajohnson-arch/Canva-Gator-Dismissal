@@ -17,10 +17,10 @@ header{display:flex;justify-content:space-between;align-items:center;padding:14p
 .panel{background:var(--panel);border:1px solid var(--bd);border-radius:16px;padding:14px;box-shadow:0 8px 24px #0005}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:12px}
-.bus{position:relative;background:var(--tile);border:1px solid var(--bd);border-radius:14px;padding:24px 14px;text-align:center;font-weight:900;font-size:36px}
+.bus{position:relative;background:var(--tile);border:1px solid var(--bd);border-radius:14px;padding:24px 14px;text-align:center;font-weight:900;font-size:32px}
 .inline-btn{position:absolute;top:8px;right:8px;font-size:12px;padding:6px 8px;border-radius:10px;border:1px solid var(--bd);background:var(--panel);color:var(--text);cursor:pointer}
 .departed-item{background:var(--tile);border:1px solid var(--bd);border-radius:12px;padding:8px 10px;margin-top:8px;display:flex;justify-content:space-between}
-input{background:#263b30;color:var(--text);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none;min-width:220px}
+input{background:#263b30;color:var(--text);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none;min-width:260px}
 button{cursor:pointer;font-weight:800;border-radius:12px;padding:10px 14px;border:1px solid var(--bd);background:var(--btn);color:var(--text)}
 button.secondary{background:var(--accent);color:#263326}
 .muted{opacity:.85;font-size:12px}
@@ -51,11 +51,11 @@ button.secondary{background:var(--accent);color:#263326}
       </div>
     </div>
     <div class="row" style="margin-top:8px">
-      <input id="busInput" placeholder="Type 102, 17, 45A… then press Space, Comma, or Enter" />
+      <input id="busInput" placeholder="Type entries separated by commas (e.g., 102, Car & Van, A/B, Blue Team). Press Enter or Comma to add." />
       <button id="addBtn">Add to Board</button>
       <button id="clearAllBtn">Clear All</button>
     </div>
-    <div class="muted">Duplicates ignored · Crisp chime + voice on add & depart · Instant add with space/comma/Enter</div>
+    <div class="muted">Accepts words & symbols (/, &, -). Newest on top. Enter/comma to add. Crisp chime + voice on add & depart.</div>
   </div>
 
   <div class="layout">
@@ -95,8 +95,14 @@ try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); 
 catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase. Check your config."); }
 
 /* ---------------- Helpers ---------------- */
-function sanitize(t){ return String(t||'').replace(/[^0-9a-zA-Z]/g,'').toUpperCase(); }
-function timeSortAlpha(a,b){ return a.localeCompare(b,'en',{numeric:true}); }
+// Keep the user’s exact text (including &, /, -, words). Trim only.
+function tokenize(input){
+  return String(input||'')
+    .split(',')                    // commas separate entries
+    .map(s => s.trim())            // keep punctuation/words as-is
+    .filter(Boolean);              // drop empties
+}
+function toKey(s){ return s.trim().toLowerCase(); } // for de-dup lookups (case-insensitive)
 
 // CRISP chimes (arrival = higher+longer, depart = lower+shorter)
 function chime(freq1,freq2,vol,dur){
@@ -112,8 +118,8 @@ function chime(freq1,freq2,vol,dur){
     o1.start(); o2.start(); o1.stop(ctx.currentTime+dur); o2.stop(ctx.currentTime+dur);
   }catch(e){}
 }
-function chimeArrival(){ chime(1046.5,1568.0,1.0,1.5); } // C6 + G6
-function chimeDepart(){  chime(659.25, 440.0,0.9,0.8); } // E5 + A4
+function chimeArrival(){ chime(1046.5,1568.0,1.0,1.5); } // C6 + G6, longer
+function chimeDepart(){  chime(659.25, 440.0,0.9,0.8); } // E5 + A4, shorter
 
 function speak(text){
   try{
@@ -168,18 +174,19 @@ var addBtn=document.getElementById('addBtn');
 var clearAllBtn=document.getElementById('clearAllBtn');
 var liveMeta=document.getElementById('liveMeta');
 
-function renderActive(numbers){
+function renderActive(items){
   board.innerHTML='';
-  numbers.sort(timeSortAlpha).forEach(function(n){
+  // items already newest-first
+  items.forEach(function(display){
     var d=document.createElement('div');
     d.className='bus';
-    d.innerHTML='<button class="inline-btn" data-id="'+n+'">Remove</button>'+n;
+    d.innerHTML='<button class="inline-btn" data-id="'+display+'">Remove</button>'+display;
     board.appendChild(d);
   });
 }
-function renderDeparted(numbers){
+function renderDeparted(items){
   departedList.innerHTML='';
-  numbers.forEach(function(n){
+  items.forEach(function(n){
     var e=document.createElement('div');
     e.className='departed-item';
     e.textContent=n;
@@ -192,18 +199,18 @@ var activeLoaded=false;
 var departedLoaded=false;
 
 if(db){
-  // ACTIVE: only announce docChanges of type 'added' after first snapshot
+  // Active: order by createdAt DESC so newest is on top
   db.collection(ACTIVE)
-    .orderBy(firebase.firestore.FieldPath.documentId())
+    .orderBy('createdAt','desc')
     .onSnapshot(function(snap){
-      liveMeta.textContent='Cloud Firestore · '+snap.size+' buses';
-      // Render full list
-      var arr = snap.docs.map(d=>d.id);
+      liveMeta.textContent='Cloud Firestore · '+snap.size+' entries';
+      var arr = snap.docs.map(d => (d.data().number ?? d.id)); // support old docs
       renderActive(arr);
 
-      // Announce only true additions (not initial load)
       if(!activeLoaded){ activeLoaded=true; return; }
-      var added = snap.docChanges().filter(c=>c.type==='added').map(c=>c.doc.id);
+      var added = snap.docChanges()
+        .filter(c => c.type==='added')
+        .map(c => (c.doc.data().number ?? c.doc.id));
       if(added.length){
         chimeArrival();
         speak('Bus ' + added.join(', ') + ' is now boarding');
@@ -212,7 +219,7 @@ if(db){
       console.error(err); liveMeta.textContent='Cloud Firestore · error';
     });
 
-  // DEPARTED: only announce new departure docs after first snapshot
+  // Departed: newest departures first
   db.collection(DEPARTED)
     .orderBy('departedAt','desc')
     .onSnapshot(function(snap){
@@ -220,7 +227,9 @@ if(db){
       renderDeparted(arr);
 
       if(!departedLoaded){ departedLoaded=true; return; }
-      var added = snap.docChanges().filter(c=>c.type==='added').map(c=> (c.doc.data().number||c.doc.id) );
+      var added = snap.docChanges()
+        .filter(c => c.type==='added')
+        .map(c => (c.doc.data().number || c.doc.id));
       if(added.length){
         chimeDepart();
         speak('Bus ' + added.join(', ') + ' has departed');
@@ -228,71 +237,95 @@ if(db){
     });
 }
 
-/* ---------------- Cloud Mutations (silent here) ---------------- */
-function addFromStringCloud(str){
-  var raw=String(str||'').split(/[ ,]+/), tokens=[];
-  for(var i=0;i<raw.length;i++){ var t=sanitize(raw[i]); if(t) tokens.push(t); }
+/* ---------------- Cloud Mutations (accept words & symbols) ---------------- */
+async function addFromStringCloud(str){
+  var tokens = tokenize(str);
   if(!tokens.length) return;
 
-  var batch=db.batch();
-  for(var i=0;i<tokens.length;i++){
-    var n=tokens[i];
-    var ref=db.collection(ACTIVE).doc(n);
-    batch.set(ref,{ number:n, createdAt: firebase.firestore.FieldValue.serverTimestamp() },{ merge:true });
+  // For each token: if not present (case-insensitive), add a new doc
+  // We store both display text and a lowercase key for de-dup checks.
+  const adds = [];
+  for(const display of tokens){
+    const key = toKey(display);
+    // check if already active
+    const snap = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
+    if(snap.empty){
+      adds.push(
+        db.collection(ACTIVE).add({
+          number: display,              // keep exact text with symbols
+          numberLower: key,             // for de-dup
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        })
+      );
+    }
   }
-  batch.commit().then(function(){ busInput.value=''; })
-  .catch(function(err){ console.error('Add failed',err); alert('Add failed. Check permissions.'); });
+  if(adds.length){
+    try{ await Promise.all(adds); }catch(e){ console.error('Add failed',e); alert('Add failed. Check permissions.'); }
+  }
+  busInput.value='';
 }
 
-function departCloud(n){
-  var from=db.collection(ACTIVE).doc(n);
-  var to  =db.collection(DEPARTED).doc(n+'-'+Date.now());
-  db.runTransaction(function(tx){
-    return tx.get(from).then(function(s){
-      if(s.exists){
-        tx.set(to,{ number:n, departedAt: firebase.firestore.FieldValue.serverTimestamp() });
-        tx.delete(from);
-      }
-    });
-  }).catch(function(err){ console.error('Remove failed',err); alert('Remove failed. Check permissions.'); });
+async function departCloud(display){
+  const key = toKey(display);
+  // find the active doc by numberLower, delete it, write to departed
+  const qs = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
+  if(qs.empty) return;
+  const docRef = qs.docs[0].ref;
+  await db.runTransaction(async tx=>{
+    const s = await tx.get(docRef);
+    if(s.exists){
+      tx.set(db.collection(DEPARTED).doc(display+'-'+Date.now()), {
+        number: display,
+        departedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      tx.delete(docRef);
+    }
+  }).catch(e=>{ console.error('Remove failed',e); alert('Remove failed. Check permissions.'); });
 }
 
 function clearAllCloud(){
   function deleteAll(coll){
     return db.collection(coll).get().then(function(q){
-      var ops=[]; q.forEach(function(d){ ops.push(db.collection(coll).doc(d.id).delete()); });
+      const ops=[]; q.forEach(d=> ops.push(db.collection(coll).doc(d.id).delete()));
       return Promise.all(ops);
     });
   }
-  Promise.all([deleteAll(ACTIVE),deleteAll(DEPARTED)])
+  Promise.all([deleteAll(ACTIVE), deleteAll(DEPARTED)])
     .catch(function(err){ console.error('Clear failed',err); alert('Clear failed. Check permissions.'); });
 }
 
-/* ---------------- Handlers ---------------- */
+/* ---------------- Handlers (no spacebar adds) ---------------- */
 addBtn.addEventListener('click', function(){
   if(!isAdmin()) return alert('Unlock admin first');
   addFromStringCloud(busInput.value);
 });
+// Only Enter or comma adds. Spacebar does nothing now.
 busInput.addEventListener('keydown', function(e){
   if(!isAdmin()) return;
-  if(e.key==='Enter'||e.key===','||e.key===' '){
-    e.preventDefault(); addFromStringCloud(busInput.value);
+  if(e.key==='Enter' || e.key===','){
+    e.preventDefault();
+    addFromStringCloud(busInput.value);
   }
 });
+// Input handler: only react to trailing comma (not space)
 busInput.addEventListener('input', function(){
   if(!isAdmin()) return;
-  var v=busInput.value;
-  if(/[ ,]$/.test(v) && v.trim().length>0){ addFromStringCloud(v); }
+  const v = busInput.value;
+  if(v.endsWith(',') && v.trim().length>1){
+    addFromStringCloud(v.slice(0,-1)); // drop the comma before sending
+    busInput.value='';
+  }
 });
-// Delegated remove
+
+// Delegated remove (by display text)
 document.addEventListener('click', function(e){
-  var id=e.target && e.target.getAttribute('data-id'); if(!id) return;
+  const id = e.target && e.target.getAttribute('data-id'); if(!id) return;
   if(!isAdmin()) return alert('Unlock admin first');
   departCloud(id);
 });
 clearAllBtn.addEventListener('click', function(){
   if(!isAdmin()) return alert('Unlock admin first');
-  if(confirm('Clear all buses and departed?')) clearAllCloud();
+  if(confirm('Clear all entries and departed?')) clearAllCloud();
 });
 </script>
 </body>
