@@ -95,12 +95,12 @@ try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); 
 catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase. Check your config."); }
 
 /* ---------------- Helpers ---------------- */
-// Keep the user’s exact text (including &, /, -, words). Trim only.
+// Keep exact text (incl. &, /, -). Separate only by comma, trim spaces.
 function tokenize(input){
   return String(input||'')
-    .split(',')                    // commas separate entries
-    .map(s => s.trim())            // keep punctuation/words as-is
-    .filter(Boolean);              // drop empties
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
 }
 function toKey(s){ return s.trim().toLowerCase(); } // for de-dup lookups (case-insensitive)
 
@@ -176,7 +176,7 @@ var liveMeta=document.getElementById('liveMeta');
 
 function renderActive(items){
   board.innerHTML='';
-  // items already newest-first
+  // items already newest-first; DO NOT sort here.
   items.forEach(function(display){
     var d=document.createElement('div');
     d.className='bus';
@@ -194,18 +194,29 @@ function renderDeparted(items){
   });
 }
 
-/* ---------------- Real-time listeners (announce once) ---------------- */
+/* ---------------- Real-time listeners (client-order by timestamps) ---------------- */
+/* We store BOTH:
+   - createdAt: serverTimestamp()     (may be momentarily null on first write)
+   - createdAtClient: Date.now()      (local fallback)
+   On each snapshot we sort by createdAt DESC, then createdAtClient DESC.
+   This guarantees newest-on-top in the exact order you added, without alpha sorting.
+*/
 var activeLoaded=false;
 var departedLoaded=false;
 
 if(db){
-  // Active: order by createdAt DESC so newest is on top
+  // ACTIVE: listen (no orderBy) then client-sort by timestamps DESC
   db.collection(ACTIVE)
-    .orderBy('createdAt','desc')
     .onSnapshot(function(snap){
       liveMeta.textContent='Cloud Firestore · '+snap.size+' entries';
-      var arr = snap.docs.map(d => (d.data().number ?? d.id)); // support old docs
-      renderActive(arr);
+      var arr = snap.docs.map(d => {
+        var data = d.data() || {};
+        var ts = data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : 0;
+        var cs = typeof data.createdAtClient === 'number' ? data.createdAtClient : 0;
+        return { display: (data.number ?? d.id), ts, cs };
+      });
+      arr.sort(function(a,b){ return (b.ts - a.ts) || (b.cs - a.cs); });
+      renderActive(arr.map(x=>x.display));
 
       if(!activeLoaded){ activeLoaded=true; return; }
       var added = snap.docChanges()
@@ -219,12 +230,17 @@ if(db){
       console.error(err); liveMeta.textContent='Cloud Firestore · error';
     });
 
-  // Departed: newest departures first
+  // DEPARTED: newest first using timestamps, same tie-break
   db.collection(DEPARTED)
-    .orderBy('departedAt','desc')
     .onSnapshot(function(snap){
-      var arr=[]; snap.forEach(function(doc){ var d=doc.data(); arr.push(d.number||doc.id); });
-      renderDeparted(arr);
+      var arr = snap.docs.map(d => {
+        var data = d.data() || {};
+        var ts = data.departedAt && data.departedAt.toMillis ? data.departedAt.toMillis() : 0;
+        var cs = typeof data.departedAtClient === 'number' ? data.departedAtClient : 0;
+        return { display: (data.number || d.id), ts, cs };
+      });
+      arr.sort(function(a,b){ return (b.ts - a.ts) || (b.cs - a.cs); });
+      renderDeparted(arr.map(x=>x.display));
 
       if(!departedLoaded){ departedLoaded=true; return; }
       var added = snap.docChanges()
@@ -242,41 +258,42 @@ async function addFromStringCloud(str){
   var tokens = tokenize(str);
   if(!tokens.length) return;
 
-  // For each token: if not present (case-insensitive), add a new doc
-  // We store both display text and a lowercase key for de-dup checks.
-  const adds = [];
+  const ops = [];
+  const now = Date.now();
   for(const display of tokens){
     const key = toKey(display);
-    // check if already active
+    // De-dup: skip if an active doc already has same normalized text
     const snap = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
     if(snap.empty){
-      adds.push(
+      ops.push(
         db.collection(ACTIVE).add({
-          number: display,              // keep exact text with symbols
-          numberLower: key,             // for de-dup
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          number: display,
+          numberLower: key,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdAtClient: now
         })
       );
     }
   }
-  if(adds.length){
-    try{ await Promise.all(adds); }catch(e){ console.error('Add failed',e); alert('Add failed. Check permissions.'); }
+  if(ops.length){
+    try{ await Promise.all(ops); }catch(e){ console.error('Add failed',e); alert('Add failed. Check permissions.'); }
   }
   busInput.value='';
 }
 
 async function departCloud(display){
   const key = toKey(display);
-  // find the active doc by numberLower, delete it, write to departed
   const qs = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
   if(qs.empty) return;
   const docRef = qs.docs[0].ref;
+  const now = Date.now();
   await db.runTransaction(async tx=>{
     const s = await tx.get(docRef);
     if(s.exists){
-      tx.set(db.collection(DEPARTED).doc(display+'-'+Date.now()), {
+      tx.set(db.collection(DEPARTED).doc(display+'-'+now), {
         number: display,
-        departedAt: firebase.firestore.FieldValue.serverTimestamp()
+        departedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        departedAtClient: now
       });
       tx.delete(docRef);
     }
@@ -299,7 +316,6 @@ addBtn.addEventListener('click', function(){
   if(!isAdmin()) return alert('Unlock admin first');
   addFromStringCloud(busInput.value);
 });
-// Only Enter or comma adds. Spacebar does nothing now.
 busInput.addEventListener('keydown', function(e){
   if(!isAdmin()) return;
   if(e.key==='Enter' || e.key===','){
@@ -307,12 +323,11 @@ busInput.addEventListener('keydown', function(e){
     addFromStringCloud(busInput.value);
   }
 });
-// Input handler: only react to trailing comma (not space)
 busInput.addEventListener('input', function(){
   if(!isAdmin()) return;
   const v = busInput.value;
   if(v.endsWith(',') && v.trim().length>1){
-    addFromStringCloud(v.slice(0,-1)); // drop the comma before sending
+    addFromStringCloud(v.slice(0,-1));
     busInput.value='';
   }
 });
@@ -330,3 +345,4 @@ clearAllBtn.addEventListener('click', function(){
 </script>
 </body>
 </html>
+
