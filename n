@@ -1,336 +1,299 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WCMS Bus Dismissal Board — Cloud Sync</title>
-  <style>
-    /* Palette: #dad7cd, #a3b18a, #588157, #3a5a40, #344e41 */
-    :root{
-      --bg:#344e41; --panel:#3a5a40; --btn:#588157; --accent:#a3b18a; --text:#dad7cd;
-      --bd:#274033; --tile:#2f4639;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial;background:var(--bg);color:var(--text)}
-    header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:#2f4639;border-bottom:1px solid var(--bd)}
-    .brand{display:flex;gap:10px;align-items:center;font-weight:800}
-    .chip{padding:4px 8px;border-radius:999px;border:1px solid var(--bd);background:#2c4437;opacity:.95;font-size:12px}
-    .container{max-width:1200px;margin:18px auto;padding:0 16px}
-    .layout{display:grid;grid-template-columns:1fr 320px;gap:16px}
-    @media (max-width: 900px){ .layout{grid-template-columns:1fr} }
-    .panel{background:var(--panel);border:1px solid var(--bd);border-radius:16px;padding:14px;box-shadow:0 8px 24px #0005}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:12px}
-    .bus{position:relative;background:var(--tile);border:1px solid var(--bd);border-radius:14px;padding:24px 14px;text-align:center;font-weight:900;font-size:36px}
-    .inline-btn{position:absolute;top:8px;right:8px;font-size:12px;padding:6px 8px;border-radius:10px;border:1px solid var(--bd);background:var(--panel);color:var(--text);cursor:pointer}
-    .departed-item{background:var(--tile);border:1px solid var(--bd);border-radius:12px;padding:8px 10px;margin-top:8px;display:flex;justify-content:space-between}
-    input{background:#263b30;color:var(--text);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none;min-width:220px}
-    button{cursor:pointer;font-weight:800;border-radius:12px;padding:10px 14px;border:1px solid var(--bd);background:var(--btn);color:var(--text)}
-    button.secondary{background:var(--accent);color:#263326}
-    .muted{opacity:.85;font-size:12px}
-    .hidden{display:none}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WCMS Bus Dismissal Board — Cloud Sync</title>
+<style>
+:root{--bg:#344e41;--panel:#3a5a40;--btn:#588157;--accent:#a3b18a;--text:#dad7cd;--bd:#274033;--tile:#2f4639}
+*{box-sizing:border-box}
+body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial;background:var(--bg);color:var(--text)}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:#2f4639;border-bottom:1px solid var(--bd)}
+.brand{display:flex;gap:10px;align-items:center;font-weight:800}
+.chip{padding:4px 8px;border-radius:999px;border:1px solid var(--bd);background:#2c4437;opacity:.95;font-size:12px}
+.container{max-width:1200px;margin:18px auto;padding:0 16px}
+.layout{display:grid;grid-template-columns:1fr 320px;gap:16px}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--bd);border-radius:16px;padding:14px;box-shadow:0 8px 24px #0005}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:12px}
+.bus{position:relative;background:var(--tile);border:1px solid var(--bd);border-radius:14px;padding:24px 14px;text-align:center;font-weight:900;font-size:36px}
+.inline-btn{position:absolute;top:8px;right:8px;font-size:12px;padding:6px 8px;border-radius:10px;border:1px solid var(--bd);background:var(--panel);color:var(--text);cursor:pointer}
+.departed-item{background:var(--tile);border:1px solid var(--bd);border-radius:12px;padding:8px 10px;margin-top:8px;display:flex;justify-content:space-between}
+input{background:#263b30;color:var(--text);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none;min-width:220px}
+button{cursor:pointer;font-weight:800;border-radius:12px;padding:10px 14px;border:1px solid var(--bd);background:var(--btn);color:var(--text)}
+button.secondary{background:var(--accent);color:#263326}
+.muted{opacity:.85;font-size:12px}
+.hidden{display:none}
+</style>
 </head>
 <body>
-  <header>
-    <div class="brand">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 13h18v3a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-3Z" stroke="#a3b18a" stroke-width="1.5"/><path d="M5 9.5h14a2 2 0 0 1 2 2V13H3v-1.5a2 2 0 0 1 2-2Z" fill="#2f4639" stroke="#a3b18a" stroke-width="1.5"/><circle cx="7" cy="18.5" r="1.7" fill="#a3b18a"/><circle cx="17" cy="18.5" r="1.7" fill="#a3b18a"/></svg>
-      <span>WCMS Bus Dismissal Board</span>
-    </div>
-    <div class="row">
-      <span id="syncBadge" class="chip">Sync: Cloud</span>
-      <span id="adminStatus" class="chip">Viewer</span>
-      <button id="adminLoginBtn" class="secondary">Admin Login</button>
-    </div>
-  </header>
+<header>
+  <div class="brand">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 13h18v3a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-3Z" stroke="#a3b18a" stroke-width="1.5"/><path d="M5 9.5h14a2 2 0 0 1 2 2V13H3v-1.5a2 2 0 0 1 2-2Z" fill="#2f4639" stroke="#a3b18a" stroke-width="1.5"/><circle cx="7" cy="18.5" r="1.7" fill="#a3b18a"/><circle cx="17" cy="18.5" r="1.7" fill="#a3b18a"/></svg>
+    <span>WCMS Bus Dismissal Board</span>
+  </div>
+  <div class="row">
+    <span id="syncBadge" class="chip">Sync: Cloud</span>
+    <span id="adminStatus" class="chip">Viewer</span>
+    <button id="adminLoginBtn" class="secondary">Admin Login</button>
+  </div>
+</header>
 
-  <div class="container">
-    <!-- Admin Controls (only visible when unlocked) -->
-    <div id="adminPanel" class="panel hidden" aria-live="polite">
-      <div class="row" style="justify-content:space-between;width:100%">
-        <strong>Admin Controls</strong>
-        <div class="row">
-          <span id="sessionTimeLeft" class="chip">Admin: --</span>
-          <button id="lockBtn">Lock Now</button>
-        </div>
+<div class="container">
+  <!-- Admin Controls -->
+  <div id="adminPanel" class="panel hidden" aria-live="polite">
+    <div class="row" style="justify-content:space-between;width:100%">
+      <strong>Admin Controls</strong>
+      <div class="row">
+        <span id="sessionTimeLeft" class="chip">Admin: --</span>
+        <button id="lockBtn">Lock Now</button>
       </div>
-      <div class="row" style="margin-top:8px">
-        <input id="busInput" placeholder="Type 102, 17, 45A… then press Space, Comma, or Enter" />
-        <button id="addBtn">Add to Board</button>
-        <button id="clearAllBtn">Clear All</button>
-      </div>
-      <div class="muted">Duplicates ignored · Crisp chime + voice on add & depart · Instant add with space/comma/Enter</div>
     </div>
-
-    <div class="layout">
-      <div class="panel">
-        <div class="row" style="justify-content:space-between;align-items:center">
-          <h2 style="margin:0">Now Boarding</h2>
-          <span class="muted" id="liveMeta">Cloud Firestore</span>
-        </div>
-        <div id="board" class="grid" aria-live="assertive"></div>
-      </div>
-      <aside class="panel" aria-live="polite">
-        <h3 style="margin:0 0 8px 0">Departed</h3>
-        <div id="departedList"></div>
-      </aside>
+    <div class="row" style="margin-top:8px">
+      <input id="busInput" placeholder="Type 102, 17, 45A… then press Space, Comma, or Enter" />
+      <button id="addBtn">Add to Board</button>
+      <button id="clearAllBtn">Clear All</button>
     </div>
+    <div class="muted">Duplicates ignored · Crisp chime + voice on add & depart · Instant add with space/comma/Enter</div>
   </div>
 
-  <!-- Firebase (Compat SDK for simplest single-file use) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+  <div class="layout">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2 style="margin:0">Now Boarding</h2>
+        <span class="muted" id="liveMeta">Cloud Firestore</span>
+      </div>
+      <div id="board" class="grid" aria-live="assertive"></div>
+    </div>
+    <aside class="panel" aria-live="polite">
+      <h3 style="margin:0 0 8px 0">Departed</h3>
+      <div id="departedList"></div>
+    </aside>
+  </div>
+</div>
 
-  <script>
-    /* ---------------- Firebase Config (yours) ---------------- */
-    const firebaseConfig = {
-      apiKey: "AIzaSyAOFY5GUONFgaorwLfaCE7imj5NbN0NN0U",
-      authDomain: "wcms-bus-board.firebaseapp.com",
-      projectId: "wcms-bus-board",
-      storageBucket: "wcms-bus-board.firebasestorage.app",
-      messagingSenderId: "302977263459",
-      appId: "1:302977263459:web:cd3aaf4a1ff3fca36b1556",
-      measurementId: "G-TP5DSZS0X2"
-    };
+<!-- Firebase (Compat SDK for simplest single-file use) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 
-    /* ---------------- App Init ---------------- */
-    let db = null;
-    try {
-      const app = firebase.initializeApp(firebaseConfig);
-      db = firebase.firestore();
-    } catch (e) {
-      console.error("Firebase init failed:", e);
-      alert("Couldn't connect to Firebase. Check your config.");
+<script>
+/* ---------------- Firebase Config (yours) ---------------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAOFY5GUONFgaorwLfaCE7imj5NbN0NN0U",
+  authDomain: "wcms-bus-board.firebaseapp.com",
+  projectId: "wcms-bus-board",
+  storageBucket: "wcms-bus-board.firebasestorage.app",
+  messagingSenderId: "302977263459",
+  appId: "1:302977263459:web:cd3aaf4a1ff3fca36b1556",
+  measurementId: "G-TP5DSZS0X2"
+};
+
+/* ---------------- App Init ---------------- */
+let db=null;
+try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); }
+catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase. Check your config."); }
+
+/* ---------------- Helpers ---------------- */
+function sanitize(t){ return String(t||'').replace(/[^0-9a-zA-Z]/g,'').toUpperCase(); }
+function timeSortAlpha(a,b){ return a.localeCompare(b,'en',{numeric:true}); }
+
+// CRISP chimes (arrival = higher+longer, depart = lower+shorter)
+function chime(freq1,freq2,vol,dur){
+  try{
+    var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return;
+    var ctx=new Ctx(); var o1=ctx.createOscillator(), o2=ctx.createOscillator(); var g=ctx.createGain();
+    o1.type='triangle'; o2.type='sine';
+    o1.frequency.value=freq1; o2.frequency.value=freq2;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol, ctx.currentTime+0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+dur); // crisp stop
+    o1.connect(g); o2.connect(g); g.connect(ctx.destination);
+    o1.start(); o2.start(); o1.stop(ctx.currentTime+dur); o2.stop(ctx.currentTime+dur);
+  }catch(e){}
+}
+function chimeArrival(){ chime(1046.5,1568.0,1.0,1.5); } // C6 + G6
+function chimeDepart(){  chime(659.25, 440.0,0.9,0.8); } // E5 + A4
+
+function speak(text){
+  try{
+    if('speechSynthesis' in window){
+      var u=new SpeechSynthesisUtterance(text);
+      u.rate=1.0; u.pitch=1.0; u.lang='en-US';
+      speechSynthesis.speak(u);
     }
+  }catch(e){}
+}
 
-    /* ---------------- Helpers ---------------- */
-    function sanitize(t){ return String(t||'').replace(/[^0-9a-zA-Z]/g,'').toUpperCase(); }
-    function timeSortAlpha(a,b){ return a.localeCompare(b,'en',{numeric:true}); }
+/* ---------------- Admin (PIN 1234) ---------------- */
+var PASSCODE='1234';
+var adminPanel=document.getElementById('adminPanel');
+var adminStatus=document.getElementById('adminStatus');
+var adminLoginBtn=document.getElementById('adminLoginBtn');
+var lockBtn=document.getElementById('lockBtn');
+var sessionTimeLeft=document.getElementById('sessionTimeLeft');
 
-    // CRISP chimes (arrival = higher+longer, depart = lower+shorter)
-    function chime(freq1, freq2, vol, dur){
-      try{
-        var Ctx = window.AudioContext || window.webkitAudioContext; if(!Ctx) return;
-        var ctx = new Ctx();
-        var o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
-        var g  = ctx.createGain();
-        o1.type='triangle'; o2.type='sine';
-        o1.frequency.value=freq1; o2.frequency.value=freq2;
-        g.gain.setValueAtTime(0.0001, ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(vol, ctx.currentTime+0.03);
-        // Crisp stop (no lingering tail)
-        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+dur);
-        o1.connect(g); o2.connect(g); g.connect(ctx.destination);
-        o1.start(); o2.start();
-        o1.stop(ctx.currentTime+dur);
-        o2.stop(ctx.currentTime+dur);
-      }catch(e){}
-    }
-    function chimeArrival(){ chime(1046.5, 1568.0, 1.0, 1.5); } // C6 + G6, ~1.5s
-    function chimeDepart() { chime(659.25,  440.0,  0.9, 0.8); } // E5 + A4,  ~0.8s
+function isAdmin(){ var v=localStorage.getItem('bus_admin_until'); return v && Number(v)>Date.now(); }
+function setAdminFor1Hour(){ var until=Date.now()+3600000; localStorage.setItem('bus_admin_until', String(until)); updateAdminUI(); }
+function clearAdmin(){ localStorage.removeItem('bus_admin_until'); updateAdminUI(); }
+function updateAdminUI(){
+  var a=isAdmin();
+  adminPanel.classList.toggle('hidden', !a);
+  adminLoginBtn.classList.toggle('hidden', a);
+  adminStatus.textContent = a ? 'Admin' : 'Viewer';
+}
+adminLoginBtn.addEventListener('click', function(){
+  var p=prompt('Enter passcode'); if(p===PASSCODE){ setAdminFor1Hour(); } else if(p!==null){ alert('Incorrect passcode.'); }
+});
+lockBtn && lockBtn.addEventListener('click', clearAdmin);
+setInterval(function(){
+  var v=localStorage.getItem('bus_admin_until');
+  if(!v){ sessionTimeLeft.textContent='Locked'; return; }
+  var ms=Number(v)-Date.now();
+  if(ms<=0){ clearAdmin(); sessionTimeLeft.textContent='Locked'; return; }
+  var m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000);
+  sessionTimeLeft.textContent='Admin: '+m+'m '+s+'s left';
+},1000);
+updateAdminUI();
 
-    function speak(text){
-      try{
-        if('speechSynthesis' in window){
-          var u=new SpeechSynthesisUtterance(text);
-          u.rate=1.0; u.pitch=1.0; u.lang='en-US';
-          speechSynthesis.speak(u);
-        }
-      }catch(e){}
-    }
+/* ---------------- Firestore Collections ---------------- */
+const ACTIVE='wcms_bus_board';
+const DEPARTED='wcms_bus_departed';
 
-    /* ---------------- Admin (PIN 1234) ---------------- */
-    var PASSCODE='1234';
-    var adminPanel=document.getElementById('adminPanel');
-    var adminStatus=document.getElementById('adminStatus');
-    var adminLoginBtn=document.getElementById('adminLoginBtn');
-    var lockBtn=document.getElementById('lockBtn');
-    var sessionTimeLeft=document.getElementById('sessionTimeLeft');
+/* ---------------- UI Elements ---------------- */
+var board=document.getElementById('board');
+var departedList=document.getElementById('departedList');
+var busInput=document.getElementById('busInput');
+var addBtn=document.getElementById('addBtn');
+var clearAllBtn=document.getElementById('clearAllBtn');
+var liveMeta=document.getElementById('liveMeta');
 
-    function isAdmin(){ var v=localStorage.getItem('bus_admin_until'); return v && Number(v) > Date.now(); }
-    function setAdminFor1Hour(){ var until=Date.now()+3600000; localStorage.setItem('bus_admin_until', String(until)); updateAdminUI(); }
-    function clearAdmin(){ localStorage.removeItem('bus_admin_until'); updateAdminUI(); }
-    function updateAdminUI(){
-      var a=isAdmin();
-      adminPanel.classList.toggle('hidden', !a);
-      adminLoginBtn.classList.toggle('hidden', a);
-      adminStatus.textContent = a ? 'Admin' : 'Viewer';
-    }
+function renderActive(numbers){
+  board.innerHTML='';
+  numbers.sort(timeSortAlpha).forEach(function(n){
+    var d=document.createElement('div');
+    d.className='bus';
+    d.innerHTML='<button class="inline-btn" data-id="'+n+'">Remove</button>'+n;
+    board.appendChild(d);
+  });
+}
+function renderDeparted(numbers){
+  departedList.innerHTML='';
+  numbers.forEach(function(n){
+    var e=document.createElement('div');
+    e.className='departed-item';
+    e.textContent=n;
+    departedList.appendChild(e);
+  });
+}
 
-    adminLoginBtn.addEventListener('click', function(){
-      var p = prompt('Enter passcode');
-      if(p===PASSCODE){ setAdminFor1Hour(); } else if(p!==null){ alert('Incorrect passcode.'); }
-    });
-    lockBtn && lockBtn.addEventListener('click', clearAdmin);
+/* ---------------- Real-time listeners (announce once) ---------------- */
+var activeLoaded=false;
+var departedLoaded=false;
 
-    setInterval(function(){
-      var v=localStorage.getItem('bus_admin_until');
-      if(!v){ sessionTimeLeft.textContent='Locked'; return; }
-      var ms=Number(v)-Date.now();
-      if(ms<=0){ clearAdmin(); sessionTimeLeft.textContent='Locked'; return; }
-      var m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000);
-      sessionTimeLeft.textContent='Admin: '+m+'m '+s+'s left';
-    }, 1000);
+if(db){
+  // ACTIVE: only announce docChanges of type 'added' after first snapshot
+  db.collection(ACTIVE)
+    .orderBy(firebase.firestore.FieldPath.documentId())
+    .onSnapshot(function(snap){
+      liveMeta.textContent='Cloud Firestore · '+snap.size+' buses';
+      // Render full list
+      var arr = snap.docs.map(d=>d.id);
+      renderActive(arr);
 
-    updateAdminUI();
-
-    /* ---------------- Firestore Collections ---------------- */
-    const ACTIVE   = 'wcms_bus_board';
-    const DEPARTED = 'wcms_bus_departed';
-
-    /* ---------------- UI Elements ---------------- */
-    var board         = document.getElementById('board');
-    var departedList  = document.getElementById('departedList');
-    var busInput      = document.getElementById('busInput');
-    var addBtn        = document.getElementById('addBtn');
-    var clearAllBtn   = document.getElementById('clearAllBtn');
-    var liveMeta      = document.getElementById('liveMeta');
-
-    function renderActive(numbers){
-      board.innerHTML='';
-      numbers.sort(timeSortAlpha).forEach(function(n){
-        var d=document.createElement('div');
-        d.className='bus';
-        d.innerHTML = '<button class="inline-btn" data-id="'+n+'">Remove</button>'+n;
-        board.appendChild(d);
-      });
-    }
-    function renderDeparted(numbers){
-      departedList.innerHTML='';
-      numbers.forEach(function(n){
-        var e=document.createElement('div');
-        e.className='departed-item';
-        e.textContent=n;
-        departedList.appendChild(e);
-      });
-    }
-
-    /* ---------------- Real-time listeners with de-dup ---------------- */
-    var firstActivePaint = true;
-    var lastActiveSet    = new Set();
-    var firstDepartPaint = true;
-    var lastDepartDocIds = new Set();
-
-    if (db){
-      // Active buses: announce only truly new ones (not initial)
-      db.collection(ACTIVE).orderBy(firebase.firestore.FieldPath.documentId())
-        .onSnapshot(function(snap){
-          liveMeta.textContent = 'Cloud Firestore · '+snap.size+' buses';
-          var arr=[], curSet = new Set();
-          snap.forEach(function(doc){ var n = doc.id; arr.push(n); curSet.add(n); });
-
-          if(!firstActivePaint){
-            var newly=[];
-            curSet.forEach(function(n){ if(!lastActiveSet.has(n)) newly.push(n); });
-            if(newly.length){
-              chimeArrival();
-              speak('Bus ' + newly.join(', ') + ' is now boarding');
-            }
-          }
-          firstActivePaint = false;
-          lastActiveSet = curSet;
-
-          renderActive(arr);
-        }, function(err){
-          console.error(err);
-          liveMeta.textContent = 'Cloud Firestore · error';
-        });
-
-      // Departed list: announce only truly new departure docs (not initial)
-      db.collection(DEPARTED).orderBy('departedAt','desc')
-        .onSnapshot(function(snap){
-          var arr=[], curIds=new Set(), newlyNums=[];
-          snap.forEach(function(doc){
-            var d=doc.data(); var id=doc.id; var n=d.number || id;
-            arr.push(n); curIds.add(id);
-            if(!firstDepartPaint && !lastDepartDocIds.has(id)){ newlyNums.push(n); }
-          });
-
-          if(!firstDepartPaint && newlyNums.length){
-            chimeDepart();
-            speak('Bus ' + newlyNums.join(', ') + ' has departed');
-          }
-          firstDepartPaint = false;
-          lastDepartDocIds = curIds;
-
-          renderDeparted(arr);
-        });
-    }
-
-    /* ---------------- Cloud Mutations (no local chimes here) ---------------- */
-    function addFromStringCloud(str){
-      var raw = String(str||'').split(/[ ,]+/), tokens=[], i;
-      for(i=0;i<raw.length;i++){ var t=sanitize(raw[i]); if(t) tokens.push(t); }
-      if(!tokens.length) return;
-
-      var batch = db.batch();
-      for(i=0;i<tokens.length;i++){
-        var n = tokens[i];
-        var ref = db.collection(ACTIVE).doc(n);
-        batch.set(ref, { number:n, createdAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      // Announce only true additions (not initial load)
+      if(!activeLoaded){ activeLoaded=true; return; }
+      var added = snap.docChanges().filter(c=>c.type==='added').map(c=>c.doc.id);
+      if(added.length){
+        chimeArrival();
+        speak('Bus ' + added.join(', ') + ' is now boarding');
       }
-      batch.commit().then(function(){ busInput.value=''; })
-      .catch(function(err){ console.error('Add failed', err); alert('Add failed. Check permissions.'); });
-    }
-
-    function departCloud(n){
-      var from = db.collection(ACTIVE).doc(n);
-      var to   = db.collection(DEPARTED).doc(n+'-'+Date.now());
-      db.runTransaction(function(tx){
-        return tx.get(from).then(function(s){
-          if(s.exists){
-            tx.set(to, { number:n, departedAt: firebase.firestore.FieldValue.serverTimestamp() });
-            tx.delete(from);
-          }
-        });
-      }).catch(function(err){ console.error('Remove failed', err); alert('Remove failed. Check permissions.'); });
-    }
-
-    function clearAllCloud(){
-      function deleteAll(coll){
-        return db.collection(coll).get().then(function(q){
-          var ops=[]; q.forEach(function(d){ ops.push(db.collection(coll).doc(d.id).delete()); });
-          return Promise.all(ops);
-        });
-      }
-      Promise.all([deleteAll(ACTIVE), deleteAll(DEPARTED)])
-        .catch(function(err){ console.error('Clear failed', err); alert('Clear failed. Check permissions.'); });
-    }
-
-    /* ---------------- Handlers ---------------- */
-    addBtn.addEventListener('click', function(){
-      if(!isAdmin()) return alert('Unlock admin first');
-      addFromStringCloud(busInput.value);
+    }, function(err){
+      console.error(err); liveMeta.textContent='Cloud Firestore · error';
     });
 
-    busInput.addEventListener('keydown', function(e){
-      if(!isAdmin()) return;
-      if(e.key==='Enter' || e.key===',' || e.key===' '){
-        e.preventDefault();
-        addFromStringCloud(busInput.value);
+  // DEPARTED: only announce new departure docs after first snapshot
+  db.collection(DEPARTED)
+    .orderBy('departedAt','desc')
+    .onSnapshot(function(snap){
+      var arr=[]; snap.forEach(function(doc){ var d=doc.data(); arr.push(d.number||doc.id); });
+      renderDeparted(arr);
+
+      if(!departedLoaded){ departedLoaded=true; return; }
+      var added = snap.docChanges().filter(c=>c.type==='added').map(c=> (c.doc.data().number||c.doc.id) );
+      if(added.length){
+        chimeDepart();
+        speak('Bus ' + added.join(', ') + ' has departed');
       }
     });
+}
 
-    busInput.addEventListener('input', function(){
-      if(!isAdmin()) return;
-      var v=busInput.value;
-      if(/[ ,]$/.test(v) && v.trim().length>0){
-        addFromStringCloud(v);
+/* ---------------- Cloud Mutations (silent here) ---------------- */
+function addFromStringCloud(str){
+  var raw=String(str||'').split(/[ ,]+/), tokens=[];
+  for(var i=0;i<raw.length;i++){ var t=sanitize(raw[i]); if(t) tokens.push(t); }
+  if(!tokens.length) return;
+
+  var batch=db.batch();
+  for(var i=0;i<tokens.length;i++){
+    var n=tokens[i];
+    var ref=db.collection(ACTIVE).doc(n);
+    batch.set(ref,{ number:n, createdAt: firebase.firestore.FieldValue.serverTimestamp() },{ merge:true });
+  }
+  batch.commit().then(function(){ busInput.value=''; })
+  .catch(function(err){ console.error('Add failed',err); alert('Add failed. Check permissions.'); });
+}
+
+function departCloud(n){
+  var from=db.collection(ACTIVE).doc(n);
+  var to  =db.collection(DEPARTED).doc(n+'-'+Date.now());
+  db.runTransaction(function(tx){
+    return tx.get(from).then(function(s){
+      if(s.exists){
+        tx.set(to,{ number:n, departedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        tx.delete(from);
       }
     });
+  }).catch(function(err){ console.error('Remove failed',err); alert('Remove failed. Check permissions.'); });
+}
 
-    // Delegated remove
-    document.addEventListener('click', function(e){
-      var id = e.target && e.target.getAttribute('data-id');
-      if(!id) return;
-      if(!isAdmin()) return alert('Unlock admin first');
-      departCloud(id);
+function clearAllCloud(){
+  function deleteAll(coll){
+    return db.collection(coll).get().then(function(q){
+      var ops=[]; q.forEach(function(d){ ops.push(db.collection(coll).doc(d.id).delete()); });
+      return Promise.all(ops);
     });
+  }
+  Promise.all([deleteAll(ACTIVE),deleteAll(DEPARTED)])
+    .catch(function(err){ console.error('Clear failed',err); alert('Clear failed. Check permissions.'); });
+}
 
-    clearAllBtn.addEventListener('click', function(){
-      if(!isAdmin()) return alert('Unlock admin first');
-      if(confirm('Clear all buses and departed?')) clearAllCloud();
-    });
-  </script>
+/* ---------------- Handlers ---------------- */
+addBtn.addEventListener('click', function(){
+  if(!isAdmin()) return alert('Unlock admin first');
+  addFromStringCloud(busInput.value);
+});
+busInput.addEventListener('keydown', function(e){
+  if(!isAdmin()) return;
+  if(e.key==='Enter'||e.key===','||e.key===' '){
+    e.preventDefault(); addFromStringCloud(busInput.value);
+  }
+});
+busInput.addEventListener('input', function(){
+  if(!isAdmin()) return;
+  var v=busInput.value;
+  if(/[ ,]$/.test(v) && v.trim().length>0){ addFromStringCloud(v); }
+});
+// Delegated remove
+document.addEventListener('click', function(e){
+  var id=e.target && e.target.getAttribute('data-id'); if(!id) return;
+  if(!isAdmin()) return alert('Unlock admin first');
+  departCloud(id);
+});
+clearAllBtn.addEventListener('click', function(){
+  if(!isAdmin()) return alert('Unlock admin first');
+  if(confirm('Clear all buses and departed?')) clearAllCloud();
+});
+</script>
 </body>
 </html>
