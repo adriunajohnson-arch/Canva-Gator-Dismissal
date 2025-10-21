@@ -176,7 +176,7 @@ var liveMeta=document.getElementById('liveMeta');
 
 function renderActive(items){
   board.innerHTML='';
-  // items already newest-first; DO NOT sort here.
+  // items already newest-first from Firestore; DO NOT sort here.
   items.forEach(function(display){
     var d=document.createElement('div');
     d.className='bus';
@@ -194,32 +194,21 @@ function renderDeparted(items){
   });
 }
 
-/* ---------------- Real-time listeners (client-order by timestamps) ---------------- */
-/* We store BOTH:
-   - createdAt: serverTimestamp()     (may be momentarily null on first write)
-   - createdAtClient: Date.now()      (local fallback)
-   On each snapshot we sort by createdAt DESC, then createdAtClient DESC.
-   This guarantees newest-on-top in the exact order you added, without alpha sorting.
-*/
-var activeLoaded=false;
-var departedLoaded=false;
+/* ---------------- Real-time listeners (order by server timestamp) ---------------- */
+let activeLoaded=false;
+let departedLoaded=false;
 
 if(db){
-  // ACTIVE: listen (no orderBy) then client-sort by timestamps DESC
+  // ACTIVE: newest first straight from Firestore
   db.collection(ACTIVE)
+    .orderBy('createdAt', 'desc')
     .onSnapshot(function(snap){
       liveMeta.textContent='Cloud Firestore · '+snap.size+' entries';
-      var arr = snap.docs.map(d => {
-        var data = d.data() || {};
-        var ts = data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : 0;
-        var cs = typeof data.createdAtClient === 'number' ? data.createdAtClient : 0;
-        return { display: (data.number ?? d.id), ts, cs };
-      });
-      arr.sort(function(a,b){ return (b.ts - a.ts) || (b.cs - a.cs); });
-      renderActive(arr.map(x=>x.display));
+      const items = snap.docs.map(d => (d.data().number ?? d.id));
+      renderActive(items);
 
       if(!activeLoaded){ activeLoaded=true; return; }
-      var added = snap.docChanges()
+      const added = snap.docChanges()
         .filter(c => c.type==='added')
         .map(c => (c.doc.data().number ?? c.doc.id));
       if(added.length){
@@ -230,20 +219,15 @@ if(db){
       console.error(err); liveMeta.textContent='Cloud Firestore · error';
     });
 
-  // DEPARTED: newest first using timestamps, same tie-break
+  // DEPARTED: newest first by departedAt
   db.collection(DEPARTED)
+    .orderBy('departedAt','desc')
     .onSnapshot(function(snap){
-      var arr = snap.docs.map(d => {
-        var data = d.data() || {};
-        var ts = data.departedAt && data.departedAt.toMillis ? data.departedAt.toMillis() : 0;
-        var cs = typeof data.departedAtClient === 'number' ? data.departedAtClient : 0;
-        return { display: (data.number || d.id), ts, cs };
-      });
-      arr.sort(function(a,b){ return (b.ts - a.ts) || (b.cs - a.cs); });
-      renderDeparted(arr.map(x=>x.display));
+      const items = snap.docs.map(d => (d.data().number || d.id));
+      renderDeparted(items);
 
       if(!departedLoaded){ departedLoaded=true; return; }
-      var added = snap.docChanges()
+      const added = snap.docChanges()
         .filter(c => c.type==='added')
         .map(c => (c.doc.data().number || c.doc.id));
       if(added.length){
@@ -255,7 +239,7 @@ if(db){
 
 /* ---------------- Cloud Mutations (accept words & symbols) ---------------- */
 async function addFromStringCloud(str){
-  var tokens = tokenize(str);
+  const tokens = tokenize(str);
   if(!tokens.length) return;
 
   const ops = [];
@@ -267,10 +251,10 @@ async function addFromStringCloud(str){
     if(snap.empty){
       ops.push(
         db.collection(ACTIVE).add({
-          number: display,
-          numberLower: key,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          createdAtClient: now
+          number: display,                          // exact text (with symbols)
+          numberLower: key,                         // for de-dup
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(), // used for ordering
+          createdAtClient: now                      // not used for order; kept for reference
         })
       );
     }
@@ -316,6 +300,7 @@ addBtn.addEventListener('click', function(){
   if(!isAdmin()) return alert('Unlock admin first');
   addFromStringCloud(busInput.value);
 });
+// Only Enter or comma adds. Spacebar does nothing now.
 busInput.addEventListener('keydown', function(e){
   if(!isAdmin()) return;
   if(e.key==='Enter' || e.key===','){
@@ -323,6 +308,7 @@ busInput.addEventListener('keydown', function(e){
     addFromStringCloud(busInput.value);
   }
 });
+// Only react to trailing comma (not space)
 busInput.addEventListener('input', function(){
   if(!isAdmin()) return;
   const v = busInput.value;
@@ -345,4 +331,3 @@ clearAllBtn.addEventListener('click', function(){
 </script>
 </body>
 </html>
-
