@@ -40,4 +40,331 @@ button.secondary{background:var(--accent);color:#263326}
   </div>
 </header>
 
-<div
+<div class="container">
+  <!-- Admin Controls -->
+  <div id="adminPanel" class="panel hidden" aria-live="polite">
+    <div class="row" style="justify-content:space-between;width:100%">
+      <strong>Admin Controls</strong>
+      <div class="row">
+        <span id="sessionTimeLeft" class="chip">Admin: --</span>
+        <button id="lockBtn">Lock Now</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="busInput" placeholder="Type entries separated by commas (e.g., 102, Car & Van, A/B, Blue Team). Press Enter or Comma to add." />
+      <button id="addBtn">Add to Board</button>
+      <button id="clearAllBtn">Clear All</button>
+    </div>
+    <div class="muted">Accepts words & symbols (/, &, -). Newest on top. Enter/comma to add. Crisp chime + voice on add & depart.</div>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2 style="margin:0">Now Boarding</h2>
+        <span class="muted" id="liveMeta">Cloud Firestore</span>
+      </div>
+      <div id="board" class="grid" aria-live="assertive"></div>
+    </div>
+    <aside class="panel" aria-live="polite">
+      <h3 style="margin:0 0 8px 0">Departed</h3>
+      <div id="departedList"></div>
+    </aside>
+  </div>
+</div>
+
+<!-- Firebase (Compat SDK for simplest single-file use) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+
+<script>
+/* ---------------- Firebase Config (yours) ---------------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAOFY5GUONFgaorwLfaCE7imj5NbN0NN0U",
+  authDomain: "wcms-bus-board.firebaseapp.com",
+  projectId: "wcms-bus-board",
+  storageBucket: "wcms-bus-board.firebasestorage.app",
+  messagingSenderId: "302977263459",
+  appId: "1:302977263459:web:cd3aaf4a1ff3fca36b1556",
+  measurementId: "G-TP5DSZS0X2"
+};
+
+/* ---------------- App Init ---------------- */
+let db=null;
+try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); }
+catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase. Check your config."); }
+
+/* ---------------- Helpers ---------------- */
+// Split ONLY on commas; keep &, /, -, spaces, words as-is.
+function tokenize(input){
+  return String(input||'')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+function toKey(s){ return s.trim().toLowerCase(); } // de-dup key (keeps symbols intact)
+
+// CRISP chimes
+function chime(freq1,freq2,vol,dur){
+  try{
+    var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return;
+    var ctx=new Ctx(); var o1=ctx.createOscillator(), o2=ctx.createOscillator(); var g=ctx.createGain();
+    o1.type='triangle'; o2.type='sine';
+    o1.frequency.value=freq1; o2.frequency.value=freq2;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol, ctx.currentTime+0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+dur);
+    o1.connect(g); o2.connect(g); g.connect(ctx.destination);
+    o1.start(); o2.start(); o1.stop(ctx.currentTime+dur); o2.stop(ctx.currentTime+dur);
+  }catch(e){}
+}
+function chimeArrival(){ chime(1046.5,1568.0,1.0,1.5); } // C6 + G6, longer
+function chimeDepart(){  chime(659.25, 440.0,0.9,0.8); } // E5 + A4, shorter
+
+function speak(text){
+  try{
+    if('speechSynthesis' in window){
+      var u=new SpeechSynthesisUtterance(text);
+      u.rate=1.0; u.pitch=1.0; u.lang='en-US';
+      speechSynthesis.speak(u);
+    }
+  }catch(e){}
+}
+
+/* ---------------- Admin (PIN 1234) ---------------- */
+var PASSCODE='1234';
+var adminPanel=document.getElementById('adminPanel');
+var adminStatus=document.getElementById('adminStatus');
+var adminLoginBtn=document.getElementById('adminLoginBtn');
+var lockBtn=document.getElementById('lockBtn');
+var sessionTimeLeft=document.getElementById('sessionTimeLeft');
+
+function isAdmin(){ var v=localStorage.getItem('bus_admin_until'); return v && Number(v)>Date.now(); }
+function setAdminFor1Hour(){ var until=Date.now()+3600000; localStorage.setItem('bus_admin_until', String(until)); updateAdminUI(); }
+function clearAdmin(){ localStorage.removeItem('bus_admin_until'); updateAdminUI(); }
+function updateAdminUI(){
+  var a=isAdmin();
+  adminPanel.classList.toggle('hidden', !a);
+  adminLoginBtn.classList.toggle('hidden', a);
+  adminStatus.textContent = a ? 'Admin' : 'Viewer';
+}
+adminLoginBtn.addEventListener('click', function(){
+  var p=prompt('Enter passcode'); if(p===PASSCODE){ setAdminFor1Hour(); } else if(p!==null){ alert('Incorrect passcode.'); }
+});
+lockBtn && lockBtn.addEventListener('click', clearAdmin);
+setInterval(function(){
+  var v=localStorage.getItem('bus_admin_until');
+  if(!v){ sessionTimeLeft.textContent='Locked'; return; }
+  var ms=Number(v)-Date.now();
+  if(ms<=0){ clearAdmin(); sessionTimeLeft.textContent='Locked'; return; }
+  var m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000);
+  sessionTimeLeft.textContent='Admin: '+m+'m '+s+'s left';
+},1000);
+updateAdminUI();
+
+/* ---------------- Firestore Collections ---------------- */
+const ACTIVE='wcms_bus_board';
+const DEPARTED='wcms_bus_departed';
+
+/* ---------------- UI Elements ---------------- */
+var board=document.getElementById('board');
+var departedList=document.getElementById('departedList');
+var busInput=document.getElementById('busInput');
+var addBtn=document.getElementById('addBtn');
+var clearAllBtn=document.getElementById('clearAllBtn');
+var liveMeta=document.getElementById('liveMeta');
+
+/* Safe element builders to avoid HTML issues with special chars */
+function makeActiveTile(label){
+  const wrap=document.createElement('div');
+  wrap.className='bus';
+  const btn=document.createElement('button');
+  btn.className='inline-btn';
+  btn.setAttribute('data-id', encodeURIComponent(label)); // store encoded
+  btn.textContent='Remove';
+  const text=document.createTextNode(label); // preserves &, /, -, spaces
+  wrap.appendChild(btn);
+  wrap.appendChild(text);
+  return wrap;
+}
+function renderActive(items){
+  board.innerHTML='';
+  items.forEach(function(display){
+    board.appendChild(makeActiveTile(display));
+  });
+}
+function renderDeparted(items){
+  departedList.innerHTML='';
+  items.forEach(function(n){
+    const e=document.createElement('div');
+    e.className='departed-item';
+    e.textContent=n;
+    departedList.appendChild(e);
+  });
+}
+
+/* ---------------- Real-time listeners (strict newest-on-top) ---------------- */
+/* We DO NOT sort by text. We sort by:
+   1) orderMs DESC  (unique, assigned per item at add time)
+   2) createdAt DESC (server)
+   3) createdAtClient DESC (local)
+*/
+let activeLoaded=false;
+let departedLoaded=false;
+
+if(db){
+  db.collection(ACTIVE)
+    .onSnapshot(function(snap){
+      liveMeta.textContent='Cloud Firestore · '+snap.size+' entries';
+
+      const list = snap.docs.map(d=>{
+        const data=d.data()||{};
+        return {
+          display: data.number ?? d.id,
+          orderMs: typeof data.orderMs==='number' ? data.orderMs : 0,
+          ts: data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : 0,
+          cs: typeof data.createdAtClient==='number' ? data.createdAtClient : 0
+        };
+      });
+
+      list.sort((a,b)=> (b.orderMs - a.orderMs) || (b.ts - a.ts) || (b.cs - a.cs));
+      renderActive(list.map(x=>x.display));
+
+      if(!activeLoaded){ activeLoaded=true; return; }
+      const added = snap.docChanges()
+        .filter(c=>c.type==='added')
+        .map(c=> (c.doc.data().number ?? c.doc.id));
+      if(added.length){
+        chimeArrival();
+        speak('Bus ' + added.join(', ') + ' is now boarding');
+      }
+    }, function(err){
+      console.error(err); liveMeta.textContent='Cloud Firestore · error';
+    });
+
+  db.collection(DEPARTED)
+    .onSnapshot(function(snap){
+      const list = snap.docs.map(d=>{
+        const data=d.data()||{};
+        return {
+          display: data.number || d.id,
+          orderMs: typeof data.departOrderMs==='number' ? data.departOrderMs : 0,
+          ts: data.departedAt && data.departedAt.toMillis ? data.departedAt.toMillis() : 0,
+          cs: typeof data.departedAtClient==='number' ? data.departedAtClient : 0
+        };
+      });
+      list.sort((a,b)=> (b.orderMs - a.orderMs) || (b.ts - a.ts) || (b.cs - a.cs));
+      renderDeparted(list.map(x=>x.display));
+
+      if(!departedLoaded){ departedLoaded=true; return; }
+      const added = snap.docChanges()
+        .filter(c=>c.type==='added')
+        .map(c=> (c.doc.data().number || c.doc.id));
+      if(added.length){
+        chimeDepart();
+        speak('Bus ' + added.join(', ') + ' has departed');
+      }
+    });
+}
+
+/* ---------------- Cloud Mutations (keep symbols & words) ---------------- */
+async function addFromStringCloud(str){
+  const tokens = tokenize(str);
+  if(!tokens.length) return;
+
+  const ops = [];
+  let base = Date.now();
+  for(let i=0;i<tokens.length;i++){
+    const display = tokens[i];
+    const key = toKey(display);
+    const snap = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
+    if(snap.empty){
+      // unique order per item (even within same batch)
+      const orderMs = base + i;  // strictly increasing
+      ops.push(
+        db.collection(ACTIVE).add({
+          number: display,                          // exact label with symbols
+          numberLower: key,                         // for de-dup
+          orderMs,                                  // strict ordering key (DESC)
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdAtClient: orderMs
+        })
+      );
+    }
+  }
+  if(ops.length){
+    try{ await Promise.all(ops); }catch(e){ console.error('Add failed',e); alert('Add failed. Check permissions.'); }
+  }
+  busInput.value='';
+}
+
+async function departCloud(display){
+  const key = toKey(display);
+  const qs = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
+  if(qs.empty) return;
+  const docRef = qs.docs[0].ref;
+  const now = Date.now();
+  await db.runTransaction(async tx=>{
+    const s = await tx.get(docRef);
+    if(s.exists){
+      tx.set(db.collection(DEPARTED).doc(display+'-'+now), {
+        number: display,
+        departOrderMs: now,                         // strict order in departed
+        departedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        departedAtClient: now
+      });
+      tx.delete(docRef);
+    }
+  }).catch(e=>{ console.error('Remove failed',e); alert('Remove failed. Check permissions.'); });
+}
+
+function clearAllCloud(){
+  function deleteAll(coll){
+    return db.collection(coll).get().then(function(q){
+      const ops=[]; q.forEach(d=> ops.push(db.collection(coll).doc(d.id).delete()));
+      return Promise.all(ops);
+    });
+  }
+  Promise.all([deleteAll(ACTIVE), deleteAll(DEPARTED)])
+    .catch(function(err){ console.error('Clear failed',err); alert('Clear failed. Check permissions.'); });
+}
+
+/* ---------------- Handlers (no spacebar adds) ---------------- */
+addBtn.addEventListener('click', function(){
+  if(!isAdmin()) return alert('Unlock admin first');
+  addFromStringCloud(busInput.value);
+});
+// Only Enter or comma adds. Spacebar does nothing.
+busInput.addEventListener('keydown', function(e){
+  if(!isAdmin()) return;
+  if(e.key==='Enter' || e.key===','){
+    e.preventDefault();
+    addFromStringCloud(busInput.value);
+  }
+});
+// Only react to trailing comma (not space)
+busInput.addEventListener('input', function(){
+  if(!isAdmin()) return;
+  const v = busInput.value;
+  if(v.endsWith(',') && v.trim().length>1){
+    addFromStringCloud(v.slice(0,-1));
+    busInput.value='';
+  }
+});
+
+// Delegated remove (label safely encoded in data-id)
+document.addEventListener('click', function(e){
+  const raw = e.target && e.target.getAttribute('data-id');
+  if(!raw) return;
+  if(!isAdmin()) return alert('Unlock admin first');
+  const label = decodeURIComponent(raw);
+  departCloud(label);
+});
+
+clearAllBtn.addEventListener('click', function(){
+  if(!isAdmin()) return alert('Unlock admin first');
+  if(confirm('Clear all entries and departed?')) clearAllCloud();
+});
+</script>
+</body>
+</html>
