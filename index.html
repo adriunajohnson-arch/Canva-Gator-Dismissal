@@ -1,451 +1,223 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bus Dismissal Board</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body {
-            box-sizing: border-box;
-            font-family: 'Poppins', sans-serif;
-        }
-        
-        .school-green { background-color: #ccd5ae; }
-        .school-green-light { background-color: #e9edc9; }
-        .school-gold { background-color: #fefae0; }
-        .school-gold-dark { background-color: #faedcd; }
-        .warm-brown { background-color: #d4a373; }
-        
-        .bus-enter {
-            animation: busEnter 0.5s ease-out;
-        }
-        
-        @keyframes busEnter {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .notification-sound {
-            animation: pulse 0.3s ease-in-out 3;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WCMS Bus Dismissal Board — Demo (Local Only)</title>
+  <style>
+    /* Palette: #dad7cd, #a3b18a, #588157, #3a5a40, #344e41 */
+    :root{
+      --bg:#344e41; --panel:#3a5a40; --btn:#588157; --accent:#a3b18a; --text:#dad7cd;
+      --panel-border:#274033; --tile:#2f4639;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial;background:var(--bg);color:var(--text)}
+    header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:#2f4639;border-bottom:1px solid var(--panel-border)}
+    .brand{display:flex;gap:10px;align-items:center;font-weight:800}
+    .chip{padding:4px 8px;border-radius:999px;border:1px solid var(--panel-border);background:#2c4437;opacity:.95;font-size:12px}
+    .container{max-width:1200px;margin:18px auto;padding:0 16px}
+    .layout{display:grid;grid-template-columns:1fr 320px;gap:16px}
+    @media (max-width: 900px){ .layout{grid-template-columns:1fr} }
+    .panel{background:var(--panel);border:1px solid var(--panel-border);border-radius:16px;padding:14px;box-shadow:0 8px 24px #0005}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:12px}
+    .bus{position:relative;background:var(--tile);border:1px solid var(--panel-border);border-radius:14px;padding:24px 14px;text-align:center;font-weight:900;font-size:36px}
+    .inline-btn{position:absolute;top:8px;right:8px;font-size:12px;padding:6px 8px;border-radius:10px;border:1px solid var(--panel-border);background:var(--panel);color:var(--text);cursor:pointer}
+    .departed-item{background:var(--tile);border:1px solid var(--panel-border);border-radius:12px;padding:8px 10px;margin-top:8px;display:flex;justify-content:space-between}
+    input{background:#263b30;color:var(--text);border:1px solid var(--panel-border);border-radius:12px;padding:10px 12px;outline:none;min-width:220px}
+    button{cursor:pointer;font-weight:800;border-radius:12px;padding:10px 14px;border:1px solid var(--panel-border);background:var(--btn);color:var(--text)}
+    button.secondary{background:var(--accent);color:#263326}
+    .muted{opacity:.85;font-size:12px}
+  </style>
 </head>
-<body class="min-h-full bg-gray-100">
-    <div id="app" class="min-h-full">
-        <!-- Navigation -->
-        <nav class="school-green text-gray-800 p-4 shadow-lg">
-            <div class="max-w-6xl mx-auto flex justify-between items-center">
-                <h1 class="text-2xl font-bold">🐊 Bus Dismissal Board</h1>
-                <div class="flex gap-4">
-                    <input 
-                        type="text" 
-                        id="busNumberInput" 
-                        placeholder="Enter bus number..." 
-                        class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    >
-                    <button 
-                        id="addBusBtn" 
-                        class="school-green text-white px-6 py-2 rounded-lg hover:school-green-light transition-colors font-semibold"
-                    >
-                        Add Bus
-                    </button>
-                </div>
-            </div>
-        </nav>
+<body>
+  <header>
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3 13h18v3a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-3Z" stroke="#a3b18a" stroke-width="1.5"/>
+        <path d="M5 9.5h14a2 2 0 0 1 2 2V13H3v-1.5a2 2 0 0 1 2-2Z" fill="#2f4639" stroke="#a3b18a" stroke-width="1.5"/>
+        <circle cx="7" cy="18.5" r="1.7" fill="#a3b18a"/>
+        <circle cx="17" cy="18.5" r="1.7" fill="#a3b18a"/>
+      </svg>
+      <span>WCMS Bus Dismissal Board</span>
+    </div>
+    <div class="row">
+      <span id="mode" class="chip">Demo Mode — Local Only</span>
+      <span id="adminStatus" class="chip">Viewer</span>
+    </div>
+  </header>
 
-        <!-- Main Display -->
-        <div class="min-h-full">
-            <div class="school-green text-gray-800 text-center py-8">
-                <h1 class="text-6xl font-bold mb-4">🐊 BUSES NOW LOADING</h1>
-                <p class="text-2xl">Please listen for your bus number</p>
-            </div>
-            
-            <div id="busGrid" class="p-8 grid gap-6 auto-rows-fr">
-                <!-- Bus grid will be populated here -->
-            </div>
-            
-            <div id="noBusesMessage" class="text-center py-20 text-gray-500 text-2xl">
-                No buses currently loading
-            </div>
-        </div>
-
-        <!-- Passcode Modal -->
-        <div id="passcodeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-            <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-                <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">Enter Admin Passcode</h2>
-                <input 
-                    type="password" 
-                    id="passcodeInput" 
-                    placeholder="Enter passcode..." 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-center text-lg"
-                >
-                <div class="flex gap-3 mt-6">
-                    <button 
-                        id="cancelPasscodeBtn" 
-                        class="flex-1 bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors font-semibold"
-                    >
-                        Cancel
-                    </button>
-                    <button 
-                        id="submitPasscodeBtn" 
-                        class="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors font-semibold"
-                    >
-                        Submit
-                    </button>
-                </div>
-                <p class="text-sm text-gray-600 mt-4 text-center">Access expires after 1 hour</p>
-            </div>
-        </div>
+  <div class="container">
+    <!-- Admin Gate -->
+    <div id="pinPanel" class="panel">
+      <div class="row">
+        <strong>Enter Passcode to Manage Buses</strong>
+        <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="Passcode (1234)" />
+        <button id="unlockBtn" class="secondary">Unlock (1 hour)</button>
+      </div>
+      <div class="muted">Teachers can open the page to view. Only Admin can add/remove.</div>
     </div>
 
-    <script>
-        class BusDismissalBoard {
-            constructor() {
-                this.buses = this.loadBuses();
-                this.passcode = '1234'; // Default passcode
-                this.adminAccess = false;
-                this.accessExpiry = null;
-                this.init();
-            }
-            
-            loadBuses() {
-                try {
-                    const saved = localStorage.getItem('busDismissalBuses');
-                    return saved ? JSON.parse(saved) : [];
-                } catch (e) {
-                    return [];
-                }
-            }
-            
-            saveBuses() {
-                try {
-                    localStorage.setItem('busDismissalBuses', JSON.stringify(this.buses));
-                } catch (e) {
-                    console.error('Could not save buses to localStorage');
-                }
-            }
-            
-            checkAdminAccess() {
-                if (this.accessExpiry && Date.now() > this.accessExpiry) {
-                    this.adminAccess = false;
-                    this.accessExpiry = null;
-                }
-                return this.adminAccess;
-            }
-            
-            init() {
-                this.bindEvents();
-                this.updateDisplay();
-                this.setupSyncListener();
-            }
-            
-            setupSyncListener() {
-                // Listen for changes from other tabs/windows
-                window.addEventListener('storage', (e) => {
-                    if (e.key === 'busDismissalBuses') {
-                        this.buses = this.loadBuses();
-                        this.updateDisplay();
-                    }
-                });
-                
-                // Also check for updates every 2 seconds as backup
-                setInterval(() => {
-                    const currentBuses = this.loadBuses();
-                    if (JSON.stringify(currentBuses) !== JSON.stringify(this.buses)) {
-                        this.buses = currentBuses;
-                        this.updateDisplay();
-                    }
-                }, 2000);
-            }
-            
-            bindEvents() {
-                document.getElementById('addBusBtn').addEventListener('click', () => this.handleAddBus());
-                document.getElementById('busNumberInput').addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') this.handleAddBus();
-                });
-                
-                // Passcode modal events
-                document.getElementById('submitPasscodeBtn').addEventListener('click', () => this.submitPasscode());
-                document.getElementById('cancelPasscodeBtn').addEventListener('click', () => this.hidePasscodeModal());
-                document.getElementById('passcodeInput').addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') this.submitPasscode();
-                });
-                
-                // Update display when window is resized
-                window.addEventListener('resize', () => {
-                    this.updateBusGrid();
-                });
-            }
-            
-            handleAddBus() {
-                if (!this.checkAdminAccess()) {
-                    this.showPasscodeModal();
-                    return;
-                }
-                this.addBus();
-            }
-            
-            showPasscodeModal() {
-                const modal = document.getElementById('passcodeModal');
-                const input = document.getElementById('passcodeInput');
-                modal.classList.remove('hidden');
-                input.focus();
-                input.value = '';
-            }
-            
-            hidePasscodeModal() {
-                const modal = document.getElementById('passcodeModal');
-                modal.classList.add('hidden');
-            }
-            
-            submitPasscode() {
-                const input = document.getElementById('passcodeInput');
-                const enteredCode = input.value.trim();
-                
-                if (enteredCode === this.passcode) {
-                    this.adminAccess = true;
-                    this.accessExpiry = Date.now() + (60 * 60 * 1000); // 1 hour from now
-                    this.hidePasscodeModal();
-                    this.addBus();
-                    this.showNotification('Admin access granted for 1 hour!', 'success');
-                } else {
-                    this.showNotification('Incorrect passcode!', 'error');
-                    input.value = '';
-                    input.focus();
-                }
-            }
-            
-            addBus() {
-                const input = document.getElementById('busNumberInput');
-                const busNumber = input.value.trim();
-                
-                if (!busNumber) return;
-                
-                if (this.buses.find(bus => bus.number === busNumber)) {
-                    this.showNotification('Bus number already exists!', 'error');
-                    return;
-                }
-                
-                const newBus = {
-                    id: Date.now(),
-                    number: busNumber,
-                    timestamp: new Date()
-                };
-                
-                this.buses.unshift(newBus);
-                input.value = '';
-                this.saveBuses();
-                this.playNotificationSound(busNumber);
-                this.updateDisplay();
-                this.showNotification(`Bus ${busNumber} added!`, 'success');
-            }
-            
-            removeBus(busId) {
-                const busIndex = this.buses.findIndex(bus => bus.id === busId);
-                if (busIndex > -1) {
-                    const busNumber = this.buses[busIndex].number;
-                    this.buses.splice(busIndex, 1);
-                    this.saveBuses();
-                    this.playSwooshSound();
-                    this.updateDisplay();
-                    this.showNotification(`Bus ${busNumber} removed!`, 'success');
-                }
-            }
-            
-            playNotificationSound(busNumber = null) {
-                // Create a longer, more attention-getting alarm sound using Web Audio API
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
-                // Create a longer sequence of alternating high and low beeps
-                for (let i = 0; i < 8; i++) {
-                    setTimeout(() => {
-                        const oscillator = audioContext.createOscillator();
-                        const gainNode = audioContext.createGain();
-                        
-                        oscillator.connect(gainNode);
-                        gainNode.connect(audioContext.destination);
-                        
-                        // Alternate between high and low frequencies for more annoying effect
-                        const frequency = i % 2 === 0 ? 1000 : 600;
-                        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
-                        gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
-                        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-                        
-                        oscillator.start(audioContext.currentTime);
-                        oscillator.stop(audioContext.currentTime + 0.5);
-                    }, i * 300);
-                }
-                
-                // After the alarm sound, announce the bus number
-                if (busNumber) {
-                    setTimeout(() => {
-                        this.speakBusNumber(busNumber);
-                    }, 2500); // Wait for alarm to finish
-                }
-            }
-            
-            speakBusNumber(busNumber) {
-                if ('speechSynthesis' in window) {
-                    const utterance = new SpeechSynthesisUtterance(`Bus number ${busNumber} is now loading`);
-                    utterance.rate = 0.8; // Slightly slower for clarity
-                    utterance.volume = 0.8;
-                    utterance.pitch = 1.0;
-                    
-                    // Try to use a clear voice if available
-                    const voices = speechSynthesis.getVoices();
-                    const preferredVoice = voices.find(voice => 
-                        voice.lang.startsWith('en') && 
-                        (voice.name.includes('Google') || voice.name.includes('Microsoft') || voice.name.includes('Alex'))
-                    );
-                    if (preferredVoice) {
-                        utterance.voice = preferredVoice;
-                    }
-                    
-                    speechSynthesis.speak(utterance);
-                }
-            }
-            
-            playSwooshSound() {
-                // Create a swoosh sound for bus removal
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                const filterNode = audioContext.createBiquadFilter();
-                
-                oscillator.connect(filterNode);
-                filterNode.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                // Create a swoosh by sweeping frequency downward with noise-like characteristics
-                oscillator.type = 'sawtooth';
-                oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.8);
-                
-                // Add filter sweep for more swoosh effect
-                filterNode.type = 'lowpass';
-                filterNode.frequency.setValueAtTime(2000, audioContext.currentTime);
-                filterNode.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.8);
-                
-                // Volume envelope for swoosh
-                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.1);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
-                
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.8);
-            }
-            
-            updateDisplay() {
-                this.updateBusGrid();
-                
-                // Trigger storage event for other tabs/windows
-                window.dispatchEvent(new StorageEvent('storage', {
-                    key: 'busDismissalBuses',
-                    newValue: JSON.stringify(this.buses),
-                    storageArea: localStorage
-                }));
-            }
-            
-            updateBusGrid() {
-                const busGrid = document.getElementById('busGrid');
-                const noBusesMessage = document.getElementById('noBusesMessage');
-                
-                if (this.buses.length === 0) {
-                    busGrid.innerHTML = '';
-                    noBusesMessage.classList.remove('hidden');
-                    return;
-                }
-                
-                noBusesMessage.classList.add('hidden');
-                
-                // Calculate optimal grid layout based on screen space
-                const busCount = this.buses.length;
-                let columns, rows;
-                
-                if (busCount === 1) {
-                    columns = 1; rows = 1;
-                } else if (busCount <= 4) {
-                    columns = 2; rows = Math.ceil(busCount / 2);
-                } else if (busCount <= 9) {
-                    columns = 3; rows = Math.ceil(busCount / 3);
-                } else if (busCount <= 16) {
-                    columns = 4; rows = Math.ceil(busCount / 4);
-                } else if (busCount <= 25) {
-                    columns = 5; rows = Math.ceil(busCount / 5);
-                } else {
-                    columns = 6; rows = Math.ceil(busCount / 6);
-                }
-                
-                // Calculate responsive sizing based on available space
-                const availableHeight = window.innerHeight - 200; // Account for header
-                const availableWidth = window.innerWidth - 64; // Account for padding
-                
-                const cardHeight = Math.max(120, Math.min(300, availableHeight / rows - 24));
-                const cardWidth = Math.max(150, Math.min(250, availableWidth / columns - 24));
-                
-                // Calculate font sizes based on card size
-                const busIconSize = Math.max(2, Math.min(4, cardHeight / 60));
-                const busTextSize = Math.max(1.5, Math.min(2.5, cardHeight / 80));
-                const busNumberSize = Math.max(2.5, Math.min(4, cardHeight / 50));
-                const loadingTextSize = Math.max(0.875, Math.min(1.125, cardHeight / 120));
-                
-                busGrid.className = `p-8 grid gap-6`;
-                busGrid.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
-                busGrid.style.height = `${availableHeight}px`;
-                
-                busGrid.innerHTML = this.buses.map(bus => `
-                    <div class="school-gold rounded-xl text-center shadow-2xl bus-enter transform hover:scale-105 transition-transform flex flex-col justify-center items-center border-2 border-opacity-20 relative" 
-                         style="min-height: ${cardHeight}px; padding: ${Math.max(8, cardHeight * 0.1)}px; border-color: #d4a373;">
-                        ${this.checkAdminAccess() ? `
-                            <button 
-                                onclick="busBoard.removeBus(${bus.id})"
-                                class="absolute top-2 right-2 bg-red-500 text-white w-8 h-8 rounded-full hover:bg-red-600 transition-colors font-bold text-sm"
-                                title="Remove bus"
-                            >
-                                ×
-                            </button>
-                        ` : ''}
-                        <div style="font-size: ${busIconSize}rem; margin-bottom: ${Math.max(4, cardHeight * 0.05)}px;">🐊</div>
-                        <div class="font-bold" style="font-size: ${busTextSize}rem; margin-bottom: ${Math.max(2, cardHeight * 0.03)}px; color: #6b7280;">BUS</div>
-                        <div class="font-black" style="font-size: ${busNumberSize}rem; line-height: 1; color: #374151;">${bus.number}</div>
-                        <div class="font-semibold" style="font-size: ${loadingTextSize}rem; margin-top: ${Math.max(4, cardHeight * 0.05)}px; color: #6b7280;">NOW LOADING</div>
-                    </div>
-                `).join('');
-            }
-            
-            showNotification(message, type) {
-                const notification = document.createElement('div');
-                notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg text-white font-semibold z-50 notification-sound ${
-                    type === 'success' ? 'bg-green-500' : 'bg-red-500'
-                }`;
-                notification.textContent = message;
-                
-                document.body.appendChild(notification);
-                
-                setTimeout(() => {
-                    notification.remove();
-                }, 3000);
-            }
-        }
-        
-        // Initialize the bus dismissal board
-        const busBoard = new BusDismissalBoard();
-    </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9912021a67652b5c',t:'MTc2MDg5NTA3Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    <!-- Admin Controls -->
+    <div id="adminPanel" class="panel" style="display:none" aria-live="polite">
+      <div class="row" style="justify-content:space-between;width:100%">
+        <strong>Admin Controls</strong>
+        <div class="row">
+          <span id="sessionTimeLeft" class="chip">Admin: --</span>
+          <button id="lockBtn">Lock Now</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="busInput" placeholder="Type 102, 17, 45A… then press Space, Comma, or Enter" />
+        <button id="addBtn">Add to Board</button>
+        <button id="clearAllBtn">Clear All</button>
+      </div>
+      <div class="muted">Duplicates ignored · Auto-announce on add/remove · Instant add with space/comma/Enter</div>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <h2 style="margin:0">Now Boarding</h2>
+          <span class="muted" id="liveMeta">Local Storage</span>
+        </div>
+        <div id="board" class="grid" aria-live="assertive"></div>
+      </div>
+      <aside class="panel" aria-live="polite">
+        <h3 style="margin:0 0 8px 0">Departed</h3>
+        <div id="departedList"></div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // ----- Safe JSON helpers -----
+    function jget(key, fallback){
+      try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; }
+    }
+
+    // ----- Audio + TTS -----
+    var soundEnabled = true;
+    function playChime(){
+      if(!soundEnabled) return;
+      try{
+        var Ctx = window.AudioContext || window.webkitAudioContext; if(!Ctx) return;
+        var ctx = new Ctx();
+        var o = ctx.createOscillator(); var g = ctx.createGain();
+        o.type = 'triangle'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.7);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime+0.7);
+      }catch(e){}
+    }
+    function speak(text){
+      try{ if('speechSynthesis' in window){ var u = new SpeechSynthesisUtterance(text); u.rate=1.0; u.pitch=1.05; u.lang='en-US'; speechSynthesis.speak(u); } }catch(e){}
+    }
+
+    // ----- Admin (PIN 1234) -----
+    var PASSCODE = '1234';
+    var adminPanel = document.getElementById('adminPanel');
+    var pinPanel   = document.getElementById('pinPanel');
+    var pinInput   = document.getElementById('pinInput');
+    var unlockBtn  = document.getElementById('unlockBtn');
+    var lockBtn    = document.getElementById('lockBtn');
+    var adminStatus= document.getElementById('adminStatus');
+    var sessionTimeLeft = document.getElementById('sessionTimeLeft');
+
+    function isAdmin(){ var v = localStorage.getItem('bus_admin_until'); return v && Number(v) > Date.now(); }
+    function setAdminFor1Hour(){ var until = Date.now()+3600000; localStorage.setItem('bus_admin_until', String(until)); updateAdminUI(); }
+    function clearAdmin(){ localStorage.removeItem('bus_admin_until'); updateAdminUI(); }
+    function updateAdminUI(){ var a=isAdmin(); adminPanel.style.display = a ? '' : 'none'; pinPanel.style.display = a ? 'none' : ''; adminStatus.textContent = a ? 'Admin' : 'Viewer'; }
+
+    unlockBtn.addEventListener('click', function(){ if(pinInput.value===PASSCODE){ setAdminFor1Hour(); } else { alert('Incorrect passcode.'); } });
+    lockBtn.addEventListener('click', clearAdmin);
+
+    setInterval(function(){
+      var v = localStorage.getItem('bus_admin_until');
+      if(!v){ sessionTimeLeft.textContent='Locked'; return; }
+      var ms = Number(v)-Date.now(); if(ms<=0){ clearAdmin(); sessionTimeLeft.textContent='Locked'; return; }
+      var m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000);
+      sessionTimeLeft.textContent = 'Admin: '+m+'m '+s+'s left';
+    }, 1000);
+
+    updateAdminUI();
+
+    // ----- Data (Local Only) -----
+    var KA='buses', KD='departed';
+    function getA(){ return jget(KA, []); }
+    function setA(v){ localStorage.setItem(KA, JSON.stringify(v)); }
+    function getD(){ return jget(KD, []); }
+    function setD(v){ localStorage.setItem(KD, JSON.stringify(v)); }
+
+    // ----- UI Elements -----
+    var board = document.getElementById('board');
+    var departedList = document.getElementById('departedList');
+    var busInput = document.getElementById('busInput');
+    var addBtn = document.getElementById('addBtn');
+    var clearAllBtn = document.getElementById('clearAllBtn');
+
+    function renderActive(){
+      var buses = getA().slice();
+      buses.sort(function(a,b){ return a.localeCompare(b, 'en', {numeric:true}); });
+      board.innerHTML = '';
+      for(var i=0;i<buses.length;i++){
+        var b = buses[i];
+        var d = document.createElement('div');
+        d.className = 'bus';
+        d.innerHTML = '<button class="inline-btn" data-id="'+b+'">Remove</button>'+b;
+        board.appendChild(d);
+      }
+    }
+    function renderDeparted(){
+      var dep = getD();
+      departedList.innerHTML = '';
+      for(var i=0;i<dep.length;i++){
+        var n = dep[i];
+        var e = document.createElement('div'); e.className='departed-item'; e.textContent=n; departedList.appendChild(e);
+      }
+    }
+    function renderAll(){ renderActive(); renderDeparted(); }
+
+    function sanitize(t){ return t.replace(/[^0-9a-zA-Z]/g,'').toUpperCase(); }
+    function addFromString(str){
+      if(!str) return 0;
+      var raw = str.split(/[ ,]+/);
+      var tokens = [];
+      for(var i=0;i<raw.length;i++){ var tok = sanitize(raw[i]); if(tok) tokens.push(tok); }
+      if(tokens.length===0) return 0;
+      var list = getA();
+      var set = {}; for(i=0;i<list.length;i++){ set[list[i].toUpperCase()] = true; }
+      var added = 0;
+      for(i=0;i<tokens.length;i++){ var n = tokens[i]; if(!set[n]){ list.push(n); set[n]=true; added++; } }
+      if(added>0){ setA(list); try{ playChime(); speak('Bus '+tokens.join(', ')+' is now boarding'); }catch(e){} renderActive(); }
+      return added;
+    }
+
+    addBtn.addEventListener('click', function(){ if(!isAdmin()) return alert('Unlock admin first'); if(addFromString(busInput.value)>0) busInput.value=''; });
+    busInput.addEventListener('keydown', function(e){ if(!isAdmin()) return; if(e.key==='Enter'||e.key===','||e.key===' '){ e.preventDefault(); if(addFromString(busInput.value)>0) busInput.value=''; } });
+    busInput.addEventListener('input', function(){ if(!isAdmin()) return; var v=busInput.value; if(/[ ,]$/.test(v) && v.trim().length>0){ if(addFromString(v)>0) busInput.value=''; } });
+
+    document.addEventListener('click', function(e){
+      var t = e.target; var id = t && t.getAttribute('data-id'); if(!id) return;
+      if(!isAdmin()) return alert('Unlock admin first');
+      var a = getA().filter(function(x){ return x!==id; }); setA(a);
+      var d = getD(); d.unshift(id); setD(d);
+      try{ playChime(); speak('Bus '+id+' has departed'); }catch(e){}
+      renderAll();
+    });
+
+    function clearAllData(){
+      try{ localStorage.removeItem(KA); }catch(e){}
+      try{ localStorage.removeItem(KD); }catch(e){}
+      renderAll();
+    }
+    clearAllBtn.addEventListener('click', function(){ if(!isAdmin()) return alert('Unlock admin first'); if(confirm('Clear all buses and departed?')){ clearAllData(); } });
+
+    // Initial paint and cross-tab updates
+    renderAll();
+    window.addEventListener('storage', function(e){ if(e.key===KA||e.key===KD) renderAll(); });
+  </script>
+</body>
 </html>
-
-
