@@ -59,7 +59,7 @@
         <button id="addBtn">Add to Board</button>
         <button id="clearAllBtn">Clear All</button>
       </div>
-      <div class="muted">Duplicates ignored · Auto-announce on add/remove · Instant add with space/comma/Enter</div>
+      <div class="muted">Duplicates ignored · Crisp chime + voice on add & depart · Instant add with space/comma/Enter</div>
     </div>
 
     <div class="layout">
@@ -83,7 +83,6 @@
 
   <script>
     /* ---------------- Firebase Config (yours) ---------------- */
-    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
     const firebaseConfig = {
       apiKey: "AIzaSyAOFY5GUONFgaorwLfaCE7imj5NbN0NN0U",
       authDomain: "wcms-bus-board.firebaseapp.com",
@@ -108,25 +107,33 @@
     function sanitize(t){ return String(t||'').replace(/[^0-9a-zA-Z]/g,'').toUpperCase(); }
     function timeSortAlpha(a,b){ return a.localeCompare(b,'en',{numeric:true}); }
 
-    // Audio + TTS
-    var soundEnabled = true; // browsers might require 1 click before audio
-    function playChime(){
-      if(!soundEnabled) return;
+    // CRISP chimes (arrival = higher+longer, depart = lower+shorter)
+    function chime(freq1, freq2, vol, dur){
       try{
         var Ctx = window.AudioContext || window.webkitAudioContext; if(!Ctx) return;
-        var ctx=new Ctx(), o=ctx.createOscillator(), g=ctx.createGain();
-        o.type='triangle'; o.frequency.value=880;
-        g.gain.setValueAtTime(0.001,ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.3,ctx.currentTime+0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.7);
-        o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.7);
+        var ctx = new Ctx();
+        var o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+        var g  = ctx.createGain();
+        o1.type='triangle'; o2.type='sine';
+        o1.frequency.value=freq1; o2.frequency.value=freq2;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(vol, ctx.currentTime+0.03);
+        // Crisp stop (no lingering tail)
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+dur);
+        o1.connect(g); o2.connect(g); g.connect(ctx.destination);
+        o1.start(); o2.start();
+        o1.stop(ctx.currentTime+dur);
+        o2.stop(ctx.currentTime+dur);
       }catch(e){}
     }
+    function chimeArrival(){ chime(1046.5, 1568.0, 1.0, 1.5); } // C6 + G6, ~1.5s
+    function chimeDepart() { chime(659.25,  440.0,  0.9, 0.8); } // E5 + A4,  ~0.8s
+
     function speak(text){
       try{
         if('speechSynthesis' in window){
           var u=new SpeechSynthesisUtterance(text);
-          u.rate=1.0; u.pitch=1.05; u.lang='en-US';
+          u.rate=1.0; u.pitch=1.0; u.lang='en-US';
           speechSynthesis.speak(u);
         }
       }catch(e){}
@@ -198,42 +205,59 @@
       });
     }
 
-    /* ---------------- Cloud Listeners (real-time) ---------------- */
+    /* ---------------- Real-time listeners with de-dup ---------------- */
     var firstActivePaint = true;
-    var lastActiveSet = new Set();
+    var lastActiveSet    = new Set();
+    var firstDepartPaint = true;
+    var lastDepartDocIds = new Set();
 
     if (db){
-      // Active buses — order by document ID (the bus number)
+      // Active buses: announce only truly new ones (not initial)
       db.collection(ACTIVE).orderBy(firebase.firestore.FieldPath.documentId())
         .onSnapshot(function(snap){
           liveMeta.textContent = 'Cloud Firestore · '+snap.size+' buses';
-          var arr = [];
-          var curSet = new Set();
+          var arr=[], curSet = new Set();
           snap.forEach(function(doc){ var n = doc.id; arr.push(n); curSet.add(n); });
-          // Play chime only for genuine additions after first paint
+
           if(!firstActivePaint){
-            var newly = [];
+            var newly=[];
             curSet.forEach(function(n){ if(!lastActiveSet.has(n)) newly.push(n); });
-            if(newly.length){ playChime(); speak('Bus '+newly.join(', ')+' is now boarding'); }
+            if(newly.length){
+              chimeArrival();
+              speak('Bus ' + newly.join(', ') + ' is now boarding');
+            }
           }
           firstActivePaint = false;
           lastActiveSet = curSet;
+
           renderActive(arr);
         }, function(err){
           console.error(err);
           liveMeta.textContent = 'Cloud Firestore · error';
         });
 
-      // Departed list — newest first
+      // Departed list: announce only truly new departure docs (not initial)
       db.collection(DEPARTED).orderBy('departedAt','desc')
         .onSnapshot(function(snap){
-          var arr=[];
-          snap.forEach(function(doc){ var d = doc.data(); arr.push(d.number || doc.id); });
+          var arr=[], curIds=new Set(), newlyNums=[];
+          snap.forEach(function(doc){
+            var d=doc.data(); var id=doc.id; var n=d.number || id;
+            arr.push(n); curIds.add(id);
+            if(!firstDepartPaint && !lastDepartDocIds.has(id)){ newlyNums.push(n); }
+          });
+
+          if(!firstDepartPaint && newlyNums.length){
+            chimeDepart();
+            speak('Bus ' + newlyNums.join(', ') + ' has departed');
+          }
+          firstDepartPaint = false;
+          lastDepartDocIds = curIds;
+
           renderDeparted(arr);
         });
     }
 
-    /* ---------------- Cloud Mutations ---------------- */
+    /* ---------------- Cloud Mutations (no local chimes here) ---------------- */
     function addFromStringCloud(str){
       var raw = String(str||'').split(/[ ,]+/), tokens=[], i;
       for(i=0;i<raw.length;i++){ var t=sanitize(raw[i]); if(t) tokens.push(t); }
@@ -245,12 +269,8 @@
         var ref = db.collection(ACTIVE).doc(n);
         batch.set(ref, { number:n, createdAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
       }
-      batch.commit().then(function(){
-        try{ playChime(); speak('Bus '+tokens.join(', ')+' is now boarding'); }catch(e){}
-        busInput.value='';
-      }).catch(function(err){
-        console.error('Add failed', err); alert('Add failed. Check permissions.');
-      });
+      batch.commit().then(function(){ busInput.value=''; })
+      .catch(function(err){ console.error('Add failed', err); alert('Add failed. Check permissions.'); });
     }
 
     function departCloud(n){
@@ -263,25 +283,18 @@
             tx.delete(from);
           }
         });
-      }).then(function(){
-        try{ playChime(); speak('Bus '+n+' has departed'); }catch(e){}
-      }).catch(function(err){
-        console.error('Remove failed', err); alert('Remove failed. Check permissions.');
-      });
+      }).catch(function(err){ console.error('Remove failed', err); alert('Remove failed. Check permissions.'); });
     }
 
     function clearAllCloud(){
       function deleteAll(coll){
         return db.collection(coll).get().then(function(q){
-          var ops=[];
-          q.forEach(function(d){ ops.push(db.collection(coll).doc(d.id).delete()); });
+          var ops=[]; q.forEach(function(d){ ops.push(db.collection(coll).doc(d.id).delete()); });
           return Promise.all(ops);
         });
       }
       Promise.all([deleteAll(ACTIVE), deleteAll(DEPARTED)])
-        .catch(function(err){
-          console.error('Clear failed', err); alert('Clear failed. Check permissions.');
-        });
+        .catch(function(err){ console.error('Clear failed', err); alert('Clear failed. Check permissions.'); });
     }
 
     /* ---------------- Handlers ---------------- */
