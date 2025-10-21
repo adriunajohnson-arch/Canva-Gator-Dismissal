@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WCMS Bus Dismissal Board — Cloud Sync</title>
+<style>
+:root{--bg:#344e41;--panel:#3a5a40;--btn:#588157;--accent:#a3b18a;--text:#dad7cd;--bd:#274033;--tile:#2f4639}
+*{box-sizing:border-box}
+body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial;background:var(--bg);color:var(--text)}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:#2f4639;border-bottom:1px solid var(--bd)}
+.brand{display:flex;gap:10px;align-items:center;font-weight:800}
+.chip{padding:4px 8px;border-radius:999px;border:1px solid var(--bd);background:#2c4437;opacity:.95;font-size:12px}
+.container{max-width:1200px;margin:18px auto;padding:0 16px}
+.layout{display:grid;grid-template-columns:1fr 320px;gap:16px}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--bd);border-radius:16px;padding:14px;box-shadow:0 8px 24px #0005}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:12px}
+.bus{position:relative;background:var(--tile);border:1px solid var(--bd);border-radius:14px;padding:24px 14px;text-align:center;font-weight:900;font-size:32px}
+.inline-btn{position:absolute;top:8px;right:8px;font-size:12px;padding:6px 8px;border-radius:10px;border:1px solid var(--bd);background:var(--panel);color:var(--text);cursor:pointer}
+.departed-item{background:var(--tile);border:1px solid var(--bd);border-radius:12px;padding:8px 10px;margin-top:8px;display:flex;justify-content:space-between}
+input{background:#263b30;color:var(--text);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none;min-width:260px}
+button{cursor:pointer;font-weight:800;border-radius:12px;padding:10px 14px;border:1px solid var(--bd);background:var(--btn);color:var(--text)}
+button.secondary{background:var(--accent);color:#263326}
+.muted{opacity:.85;font-size:12px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 13h18v3a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-3Z" stroke="#a3b18a" stroke-width="1.5"/><path d="M5 9.5h14a2 2 0 0 1 2 2V13H3v-1.5a2 2 0 0 1 2-2Z" fill="#2f4639" stroke="#a3b18a" stroke-width="1.5"/><circle cx="7" cy="18.5" r="1.7" fill="#a3b18a"/><circle cx="17" cy="18.5" r="1.7" fill="#a3b18a"/></svg>
+    <span>WCMS Bus Dismissal Board</span>
+  </div>
+  <div class="row">
+    <span id="syncBadge" class="chip">Sync: Cloud</span>
+    <span id="adminStatus" class="chip">Viewer</span>
+    <button id="adminLoginBtn" class="secondary">Admin Login</button>
+  </div>
+</header>
+
+<div
