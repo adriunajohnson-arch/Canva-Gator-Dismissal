@@ -23,6 +23,7 @@ header{display:flex;justify-content:space-between;align-items:center;padding:14p
 input{background:#263b30;color:var(--text);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none;min-width:260px}
 button{cursor:pointer;font-weight:800;border-radius:12px;padding:10px 14px;border:1px solid var(--bd);background:var(--btn);color:var(--text)}
 button.secondary{background:var(--accent);color:#263326}
+button.ghost{background:#263b30}
 .muted{opacity:.85;font-size:12px}
 .hidden{display:none}
 </style>
@@ -34,6 +35,7 @@ button.secondary{background:var(--accent);color:#263326}
     <span>WCMS Bus Dismissal Board</span>
   </div>
   <div class="row">
+    <button id="enableSound" class="ghost">Enable Sound</button>
     <span id="syncBadge" class="chip">Sync: Cloud</span>
     <span id="adminStatus" class="chip">Viewer</span>
     <button id="adminLoginBtn" class="secondary">Admin Login</button>
@@ -94,33 +96,78 @@ let db=null;
 try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); }
 catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase. Check your config."); }
 
-/* ---------------- Audio & Speech helpers ---------------- */
-let audioWarmed = false;
-function warmAudioOnce(){
-  if(audioWarmed) return;
-  audioWarmed = true;
+/* ---------------- Audio + Speech (robust) ---------------- */
+let audioEnabled = false;
+let preferredVoice = null;
+
+function getVoicesSafe(){
+  try { const v = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; return Array.isArray(v)?v:[]; }
+  catch { return []; }
+}
+function pickVoice(){
+  const voices = getVoicesSafe();
+  const prefs = ["en-US","en_US","en-GB","en_GB"];
+  let best = null;
+  for(const p of prefs){
+    const f = voices.find(v => (v.lang||"").toLowerCase()===p.toLowerCase());
+    if(f){ best=f; break; }
+  }
+  preferredVoice = best || voices[0] || null;
+}
+function waitForVoices(timeoutMs=3000){
+  return new Promise(resolve=>{
+    if(!('speechSynthesis' in window)) return resolve(false);
+    if(getVoicesSafe().length) return resolve(true);
+    let done=false;
+    const timer=setTimeout(()=>{ if(!done){ done=true; resolve(getVoicesSafe().length>0); }}, timeoutMs);
+    window.speechSynthesis.onvoiceschanged = () => {
+      if(done) return;
+      done=true; clearTimeout(timer);
+      resolve(getVoicesSafe().length>0);
+    };
+  });
+}
+function primeSpeech(){
+  if(!('speechSynthesis' in window)) return;
   try{
-    if('speechSynthesis' in window){ speechSynthesis.cancel(); speechSynthesis.resume(); }
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume=0; u.rate=1; u.pitch=1; u.lang="en-US";
+    if(preferredVoice) u.voice=preferredVoice;
+    window.speechSynthesis.speak(u);
   }catch(e){}
 }
-['click','touchstart','keydown'].forEach(evt=> window.addEventListener(evt, warmAudioOnce, {once:true}));
+async function enableSoundNow(){
+  audioEnabled = true;
+  await waitForVoices(2500);
+  pickVoice();
+  primeSpeech();
+  const btn=document.getElementById('enableSound');
+  btn.textContent='Sound Enabled';
+  btn.classList.add('secondary');
+}
+document.getElementById('enableSound').addEventListener('click', enableSoundNow);
+// also auto-enable on first interaction:
+['click','touchstart','keydown'].forEach(evt=>{
+  window.addEventListener(evt, function once(){ if(!audioEnabled) enableSoundNow(); }, {once:true});
+});
+if('speechSynthesis' in window){
+  window.speechSynthesis.onvoiceschanged = () => { if(!preferredVoice){ pickVoice(); } };
+}
 
 // Speak-friendly mapping (62/65 -> "62 slash 65")
 function speakify(label){
-  let t = String(label);
-  t = t.replace(/\//g, ' slash ');
-  t = t.replace(/&/g, ' and ');
-  t = t.replace(/-/g, ' dash ');
-  t = t.replace(/\+/g, ' plus ');
-  t = t.replace(/\s+/g, ' ').trim();
+  let t=String(label);
+  t=t.replace(/\//g,' slash ').replace(/&/g,' and ').replace(/-/g,' dash ').replace(/\+/g,' plus ');
+  t=t.replace(/\s+/g,' ').trim();
   return t;
 }
-
-// CRISP chimes
 function chime(freq1,freq2,vol,dur){
+  if(!audioEnabled) return;
   try{
-    var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return;
-    var ctx=new Ctx(); var o1=ctx.createOscillator(), o2=ctx.createOscillator(); var g=ctx.createGain();
+    const Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return;
+    const ctx=new Ctx(); const o1=ctx.createOscillator(), o2=ctx.createOscillator(); const g=ctx.createGain();
     o1.type='triangle'; o2.type='sine';
     o1.frequency.value=freq1; o2.frequency.value=freq2;
     g.gain.setValueAtTime(0.0001, ctx.currentTime);
@@ -130,17 +177,24 @@ function chime(freq1,freq2,vol,dur){
     o1.start(); o2.start(); o1.stop(ctx.currentTime+dur); o2.stop(ctx.currentTime+dur);
   }catch(e){}
 }
-function chimeArrival(){ chime(1046.5,1568.0,1.0,1.5); } // C6 + G6
-function chimeDepart(){  chime(659.25, 440.0,0.9,0.8); } // E5 + A4
+function chimeArrival(){ chime(1046.5,1568.0,1.0,1.5); }
+function chimeDepart(){  chime(659.25, 440.0,0.9,0.8); }
 
 function speak(text){
+  if(!audioEnabled || !('speechSynthesis' in window)) return;
   try{
-    if(!('speechSynthesis' in window)) return;
-    const u = new SpeechSynthesisUtterance(text);
+    // re-prime each time to avoid stuck engines
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
+    const u=new SpeechSynthesisUtterance(text);
     u.rate=1.0; u.pitch=1.0; u.lang='en-US';
-    speechSynthesis.cancel(); // prevent overlaps
-    speechSynthesis.resume(); // iOS/Safari quirk
-    speechSynthesis.speak(u);
+    if(preferredVoice) u.voice=preferredVoice;
+
+    // If it fails to start, retry once shortly after
+    let tried=false;
+    u.onerror = ()=>{ if(!tried){ tried=true; setTimeout(()=>{ window.speechSynthesis.resume(); window.speechSynthesis.speak(u); }, 120); } };
+    // Some engines pause when new audio played—resume just before speaking
+    setTimeout(()=>{ window.speechSynthesis.resume(); window.speechSynthesis.speak(u); }, 10);
   }catch(e){}
 }
 
@@ -162,7 +216,6 @@ function updateAdminUI(){
   adminStatus.textContent = a ? 'Admin' : 'Viewer';
 }
 adminLoginBtn.addEventListener('click', function(){
-  warmAudioOnce();
   var p=prompt('Enter passcode'); if(p===PASSCODE){ setAdminFor1Hour(); } else if(p!==null){ alert('Incorrect passcode.'); }
 });
 lockBtn && lockBtn.addEventListener('click', clearAdmin);
@@ -188,20 +241,20 @@ var addBtn=document.getElementById('addBtn');
 var clearAllBtn=document.getElementById('clearAllBtn');
 var liveMeta=document.getElementById('liveMeta');
 
-/* Build tiles with real doc IDs so removal is bulletproof */
+/* Build tiles with real doc IDs (robust remove) */
 function makeActiveTile(id, label){
   const wrap=document.createElement('div');
   wrap.className='bus';
   const btn=document.createElement('button');
   btn.className='inline-btn';
-  btn.setAttribute('data-doc', id);                   // exact Firestore doc id
-  btn.setAttribute('data-label', encodeURIComponent(label)); // nice fallback
+  btn.setAttribute('data-doc', id);
+  btn.setAttribute('data-label', encodeURIComponent(label));
   btn.textContent='Remove';
   wrap.appendChild(btn);
-  wrap.appendChild(document.createTextNode(label));   // displays symbols correctly
+  wrap.appendChild(document.createTextNode(label));
   return wrap;
 }
-function renderActive(items){ // items: [{id, display}]
+function renderActive(items){
   board.innerHTML='';
   items.forEach(it=> board.appendChild(makeActiveTile(it.id, it.display)));
 }
@@ -241,8 +294,7 @@ if(db){
       .filter(c=>c.type==='added')
       .map(c=> (c.doc.data().number ?? c.doc.id));
     if(added.length){
-      // play chime then speak after a small delay
-      const spoken = added.map(speakify).join(', ');
+      const spoken = added.map(s => speakify(s)).join(', ');
       chimeArrival();
       setTimeout(()=> speak('Bus ' + spoken + ' is now boarding'), 200);
     }
@@ -266,7 +318,7 @@ if(db){
       .filter(c=>c.type==='added')
       .map(c=> (c.doc.data().number || c.doc.id));
     if(added.length){
-      const spoken = added.map(speakify).join(', ');
+      const spoken = added.map(s => speakify(s)).join(', ');
       chimeDepart();
       setTimeout(()=> speak('Bus ' + spoken + ' has departed'), 120);
     }
@@ -274,10 +326,7 @@ if(db){
 }
 
 /* ---------------- Mutations ---------------- */
-// Split ONLY on commas; keep &, /, -, spaces, words exactly.
-function tokenize(input){
-  return String(input||'').split(',').map(s=>s.trim()).filter(Boolean);
-}
+function tokenize(input){ return String(input||'').split(',').map(s=>s.trim()).filter(Boolean); }
 function toKey(s){ return s.trim().toLowerCase(); }
 
 async function addFromStringCloud(str){
@@ -291,7 +340,7 @@ async function addFromStringCloud(str){
     const key = toKey(display);
     const snap = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
     if(snap.empty){
-      const orderMs = base + i; // strictly increasing for batch
+      const orderMs = base + i; // strictly increasing
       ops.push(
         db.collection(ACTIVE).add({
           number: display,
@@ -313,22 +362,13 @@ async function departByDocId(docId){
   try{ await db.collection(ACTIVE).doc(docId).delete(); }
   catch(e){ console.error('Delete by docId failed', e); throw e; }
 }
-
 async function departByLookup(label){
   const key = toKey(label);
-  // Try by normalized field
   let qs = await db.collection(ACTIVE).where('numberLower','==',key).limit(5).get();
-  if(qs.empty){
-    // Try exact display label
-    qs = await db.collection(ACTIVE).where('number','==',label).limit(5).get();
-  }
-  const ops=[];
-  qs.forEach(d=> ops.push(db.collection(ACTIVE).doc(d.id).delete()));
+  if(qs.empty){ qs = await db.collection(ACTIVE).where('number','==',label).limit(5).get(); }
+  const ops=[]; qs.forEach(d=> ops.push(db.collection(ACTIVE).doc(d.id).delete()));
   if(ops.length) await Promise.all(ops);
-  else {
-    // Legacy: a doc id literally equal to the label (e.g., "62/65")
-    try{ await db.collection(ACTIVE).doc(label).delete(); }catch(e){}
-  }
+  else { try{ await db.collection(ACTIVE).doc(label).delete(); }catch(e){} } // legacy id fallback
 }
 
 function clearAllCloud(){
@@ -342,17 +382,15 @@ function clearAllCloud(){
     .catch(function(err){ console.error('Clear failed',err); alert('Clear failed. Check permissions.'); });
 }
 
-/* ---------------- Handlers (no spacebar adds) ---------------- */
-addBtn.addEventListener('click', function(){
+/* ---------------- Handlers ---------------- */
+document.getElementById('addBtn').addEventListener('click', function(){
   if(!isAdmin()) return alert('Unlock admin first');
-  warmAudioOnce();
   addFromStringCloud(busInput.value);
 });
 busInput.addEventListener('keydown', function(e){
   if(!isAdmin()) return;
   if(e.key==='Enter' || e.key===','){
     e.preventDefault();
-    warmAudioOnce();
     addFromStringCloud(busInput.value);
   }
 });
@@ -360,29 +398,19 @@ busInput.addEventListener('input', function(){
   if(!isAdmin()) return;
   const v = busInput.value;
   if(v.endsWith(',') && v.trim().length>1){
-    warmAudioOnce();
     addFromStringCloud(v.slice(0,-1));
     busInput.value='';
   }
 });
-
-// Delegated remove
 document.addEventListener('click', async function(e){
-  const t = e.target;
+  const t=e.target;
   if(!t || !t.hasAttribute('data-doc')) return;
   if(!isAdmin()) return alert('Unlock admin first');
-
-  const docId = t.getAttribute('data-doc');
-  const label = decodeURIComponent(t.getAttribute('data-label')||'');
-  try{
-    await departByDocId(docId);
-  }catch(_){
-    // Fallbacks if direct doc deletion fails for any reason
-    await departByLookup(label);
-  }
+  const docId=t.getAttribute('data-doc');
+  const label=decodeURIComponent(t.getAttribute('data-label')||'');
+  try{ await departByDocId(docId); }catch(_){ await departByLookup(label); }
 });
-
-clearAllBtn.addEventListener('click', function(){
+document.getElementById('clearAllBtn').addEventListener('click', function(){
   if(!isAdmin()) return alert('Unlock admin first');
   if(confirm('Clear all entries and departed?')) clearAllCloud();
 });
