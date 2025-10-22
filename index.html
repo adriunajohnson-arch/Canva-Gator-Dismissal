@@ -23,19 +23,45 @@ header{display:flex;justify-content:space-between;align-items:center;padding:14p
 input{background:#263b30;color:var(--text);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none;min-width:260px}
 button{cursor:pointer;font-weight:800;border-radius:12px;padding:10px 14px;border:1px solid var(--bd);background:var(--btn);color:var(--text)}
 button.secondary{background:var(--accent);color:#263326}
-button.ghost{background:#263b30}
 .muted{opacity:.85;font-size:12px}
 .hidden{display:none}
+
+/* Full-screen sound gate */
+#soundGate{
+  position:fixed;inset:0;z-index:1000;background:linear-gradient(180deg,#2b3f34 0%,#344e41 100%);
+  display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;
+  padding:24px;cursor:pointer;
+}
+#soundGate .card{
+  background:#263b30;border:1px solid var(--bd);border-radius:16px;max-width:560px;width:min(92%,560px);
+  padding:24px 20px;box-shadow:0 12px 40px #0007;
+}
+#soundGate h1{margin:0 0 8px 0;font-size:26px}
+#soundGate p{margin:6px 0 14px 0;opacity:.95}
+#soundGate .tapHint{opacity:.8;font-size:13px}
+#soundGate .gateBtn{
+  margin-top:12px;padding:12px 16px;border-radius:12px;border:1px solid var(--bd);
+  background:var(--btn);color:var(--text);font-weight:900;font-size:16px;
+}
 </style>
 </head>
 <body>
+<!-- Sound gate overlay (tap anywhere or button to enable) -->
+<div id="soundGate" role="button" aria-label="Tap to enable announcements">
+  <div class="card">
+    <h1>🔊 Enable Bus Announcements</h1>
+    <p>This page will chime and read numbers aloud. Tap to allow sound on this device.</p>
+    <button class="gateBtn" id="gateBtn">Enable Sound</button>
+    <div class="tapHint">Tip: You’ll only need to do this once per device per day.</div>
+  </div>
+</div>
+
 <header>
   <div class="brand">
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 13h18v3a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-3Z" stroke="#a3b18a" stroke-width="1.5"/><path d="M5 9.5h14a2 2 0 0 1 2 2V13H3v-1.5a2 2 0 0 1 2-2Z" fill="#2f4639" stroke="#a3b18a" stroke-width="1.5"/><circle cx="7" cy="18.5" r="1.7" fill="#a3b18a"/><circle cx="17" cy="18.5" r="1.7" fill="#a3b18a"/></svg>
     <span>WCMS Bus Dismissal Board</span>
   </div>
   <div class="row">
-    <button id="enableSound" class="ghost">Enable Sound</button>
     <span id="syncBadge" class="chip">Sync: Cloud</span>
     <span id="adminStatus" class="chip">Viewer</span>
     <button id="adminLoginBtn" class="secondary">Admin Login</button>
@@ -96,7 +122,7 @@ let db=null;
 try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); }
 catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase. Check your config."); }
 
-/* ---------------- Audio + Speech (robust) ---------------- */
+/* ---------------- Audio + Speech (robust + gated) ---------------- */
 let audioEnabled = false;
 let preferredVoice = null;
 
@@ -139,22 +165,18 @@ function primeSpeech(){
   }catch(e){}
 }
 async function enableSoundNow(){
+  // Called by full-screen gate
   audioEnabled = true;
   await waitForVoices(2500);
   pickVoice();
   primeSpeech();
-  const btn=document.getElementById('enableSound');
-  btn.textContent='Sound Enabled';
-  btn.classList.add('secondary');
+
+  // Dismiss the overlay
+  const gate = document.getElementById('soundGate');
+  if(gate){ gate.style.display='none'; }
 }
-document.getElementById('enableSound').addEventListener('click', enableSoundNow);
-// also auto-enable on first interaction:
-['click','touchstart','keydown'].forEach(evt=>{
-  window.addEventListener(evt, function once(){ if(!audioEnabled) enableSoundNow(); }, {once:true});
-});
-if('speechSynthesis' in window){
-  window.speechSynthesis.onvoiceschanged = () => { if(!preferredVoice){ pickVoice(); } };
-}
+document.getElementById('soundGate').addEventListener('click', enableSoundNow);
+document.getElementById('gateBtn').addEventListener('click', function(e){ e.stopPropagation(); enableSoundNow(); });
 
 // Speak-friendly mapping (62/65 -> "62 slash 65")
 function speakify(label){
@@ -183,17 +205,14 @@ function chimeDepart(){  chime(659.25, 440.0,0.9,0.8); }
 function speak(text){
   if(!audioEnabled || !('speechSynthesis' in window)) return;
   try{
-    // re-prime each time to avoid stuck engines
     window.speechSynthesis.cancel();
     window.speechSynthesis.resume();
     const u=new SpeechSynthesisUtterance(text);
     u.rate=1.0; u.pitch=1.0; u.lang='en-US';
     if(preferredVoice) u.voice=preferredVoice;
 
-    // If it fails to start, retry once shortly after
     let tried=false;
     u.onerror = ()=>{ if(!tried){ tried=true; setTimeout(()=>{ window.speechSynthesis.resume(); window.speechSynthesis.speak(u); }, 120); } };
-    // Some engines pause when new audio played—resume just before speaking
     setTimeout(()=>{ window.speechSynthesis.resume(); window.speechSynthesis.speak(u); }, 10);
   }catch(e){}
 }
