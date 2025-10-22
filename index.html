@@ -19,9 +19,7 @@ header{display:flex;justify-content:space-between;align-items:center;padding:14p
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:12px}
 .bus{position:relative;background:var(--tile);border:1px solid var(--bd);border-radius:14px;padding:24px 14px;text-align:center;font-weight:900;font-size:32px}
 .inline-btn{position:absolute;top:8px;right:8px;font-size:12px;padding:6px 8px;border-radius:10px;border:1px solid var(--bd);background:var(--panel);color:var(--text);cursor:pointer}
-.inline-left{position:absolute;top:8px;left:8px;font-size:12px;padding:6px 8px;border-radius:10px;border:1px solid var(--bd);background:#263b30;color:var(--text);cursor:pointer}
-.departed-item{background:var(--tile);border:1px solid var(--bd);border-radius:12px;padding:8px 10px;margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.departed-item .announce{border:1px solid var(--bd);background:#263b30;color:var(--text);border-radius:10px;padding:6px 8px;font-size:12px;cursor:pointer}
+.departed-item{background:var(--tile);border:1px solid var(--bd);border-radius:12px;padding:8px 10px;margin-top:8px;display:flex;justify-content:space-between}
 input{background:#263b30;color:var(--text);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none;min-width:260px}
 button{cursor:pointer;font-weight:800;border-radius:12px;padding:10px 14px;border:1px solid var(--bd);background:var(--btn);color:var(--text)}
 button.secondary{background:var(--accent);color:#263326}
@@ -32,8 +30,9 @@ button.secondary{background:var(--accent);color:#263326}
 #soundGate{
   position:fixed;inset:0;z-index:1000;background:linear-gradient(180deg,#2b3f34 0%,#344e41 100%);
   display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;
-  padding:24px;cursor:pointer;
+  padding:24px;cursor:pointer;transition:opacity .25s ease;
 }
+#soundGate.hidden{opacity:0;pointer-events:none}
 #soundGate .card{
   background:#263b30;border:1px solid var(--bd);border-radius:16px;max-width:560px;width:min(92%,560px);
   padding:24px 20px;box-shadow:0 12px 40px #0007;
@@ -124,9 +123,10 @@ let db=null;
 try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); }
 catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase. Check your config."); }
 
-/* ---------------- Audio + Speech (robust + gated) ---------------- */
+/* ---------------- Audio + Speech (robust + gated + single context) ---------------- */
 let audioEnabled = false;
 let preferredVoice = null;
+let audioCtx = null; // single, reusable
 
 function getVoicesSafe(){
   try { const v = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; return Array.isArray(v)?v:[]; }
@@ -149,9 +149,7 @@ function waitForVoices(timeoutMs=3000){
     let done=false;
     const timer=setTimeout(()=>{ if(!done){ done=true; resolve(getVoicesSafe().length>0); }}, timeoutMs);
     window.speechSynthesis.onvoiceschanged = () => {
-      if(done) return;
-      done=true; clearTimeout(timer);
-      resolve(getVoicesSafe().length>0);
+      if(done) return; done=true; clearTimeout(timer); resolve(getVoicesSafe().length>0);
     };
   });
 }
@@ -166,14 +164,26 @@ function primeSpeech(){
     window.speechSynthesis.speak(u);
   }catch(e){}
 }
+
+// IMPORTANT: Hide overlay first, then enable sound in background.
 async function enableSoundNow(){
-  audioEnabled = true;
-  await waitForVoices(2500);
-  pickVoice();
-  primeSpeech();
   const gate = document.getElementById('soundGate');
-  if(gate){ gate.style.display='none'; }
+  if(gate){ gate.classList.add('hidden'); setTimeout(()=>{ if(gate) gate.style.display='none'; }, 260); }
+
+  try{
+    audioEnabled = true;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (Ctx && !audioCtx) audioCtx = new Ctx();
+    if (audioCtx && audioCtx.state === 'suspended') { try{ await audioCtx.resume(); }catch{} }
+    await waitForVoices(2500);
+    pickVoice();
+    primeSpeech();
+  }catch(err){
+    // Even if enabling fails, the app remains usable; chime/voice just won’t play until tapped again.
+    console.error('Sound enable error:', err);
+  }
 }
+
 document.getElementById('soundGate').addEventListener('click', enableSoundNow);
 document.getElementById('gateBtn').addEventListener('click', function(e){ e.stopPropagation(); enableSoundNow(); });
 
@@ -183,18 +193,28 @@ function speakify(label){
   t=t.replace(/\s+/g,' ').trim();
   return t;
 }
-function chime(freq1,freq2,vol,dur){
+
+// Use one audio context; resume before each chime
+async function chime(freq1,freq2,vol,dur){
   if(!audioEnabled) return;
   try{
-    const Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return;
-    const ctx=new Ctx(); const o1=ctx.createOscillator(), o2=ctx.createOscillator(); const g=ctx.createGain();
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!audioCtx && Ctx) audioCtx = new Ctx();
+    if(!audioCtx) return;
+    if(audioCtx.state === 'suspended'){ try{ await audioCtx.resume(); }catch{} }
+
+    const o1 = audioCtx.createOscillator();
+    const o2 = audioCtx.createOscillator();
+    const g  = audioCtx.createGain();
     o1.type='triangle'; o2.type='sine';
-    o1.frequency.value=freq1; o2.frequency.value=freq2;
-    g.gain.setValueAtTime(0.0001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(vol, ctx.currentTime+0.03);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+dur);
-    o1.connect(g); o2.connect(g); g.connect(ctx.destination);
-    o1.start(); o2.start(); o1.stop(ctx.currentTime+dur); o2.stop(ctx.currentTime+dur);
+    o1.frequency.setValueAtTime(freq1, audioCtx.currentTime);
+    o2.frequency.setValueAtTime(freq2, audioCtx.currentTime);
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol, audioCtx.currentTime+0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+dur);
+    o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
+    o1.start(); o2.start();
+    o1.stop(audioCtx.currentTime+dur); o2.stop(audioCtx.currentTime+dur);
   }catch(e){}
 }
 function chimeArrival(){ chime(1046.5,1568.0,1.0,1.5); }
@@ -258,24 +278,16 @@ var addBtn=document.getElementById('addBtn');
 var clearAllBtn=document.getElementById('clearAllBtn');
 var liveMeta=document.getElementById('liveMeta');
 
-/* Build tiles with doc IDs + ANNOUNCE button */
+/* Build tiles with real doc IDs (Remove only) */
 function makeActiveTile(id, label){
   const wrap=document.createElement('div');
   wrap.className='bus';
-  const btnRemove=document.createElement('button');
-  btnRemove.className='inline-btn';
-  btnRemove.setAttribute('data-doc', id);
-  btnRemove.setAttribute('data-label', encodeURIComponent(label));
-  btnRemove.textContent='Remove';
-
-  const btnAnn=document.createElement('button');
-  btnAnn.className='inline-left';
-  btnAnn.setAttribute('data-announce', encodeURIComponent(label));
-  btnAnn.setAttribute('data-status','active');
-  btnAnn.textContent='Announce';
-
-  wrap.appendChild(btnRemove);
-  wrap.appendChild(btnAnn);
+  const btn=document.createElement('button');
+  btn.className='inline-btn';
+  btn.setAttribute('data-doc', id);
+  btn.setAttribute('data-label', encodeURIComponent(label));
+  btn.textContent='Remove';
+  wrap.appendChild(btn);
   wrap.appendChild(document.createTextNode(label));
   return wrap;
 }
@@ -286,18 +298,10 @@ function renderActive(items){
 function renderDeparted(items){
   departedList.innerHTML='';
   items.forEach(n=>{
-    const row=document.createElement('div');
-    row.className='departed-item';
-    const label=document.createElement('div');
-    label.textContent=n;
-    const btn=document.createElement('button');
-    btn.className='announce';
-    btn.setAttribute('data-announce', encodeURIComponent(n));
-    btn.setAttribute('data-status','departed');
-    btn.textContent='Announce';
-    row.appendChild(label);
-    row.appendChild(btn);
-    departedList.appendChild(row);
+    const e=document.createElement('div');
+    e.className='departed-item';
+    e.textContent=n;
+    departedList.appendChild(e);
   });
 }
 
@@ -391,7 +395,7 @@ async function addFromStringCloud(str){
   busInput.value='';
 }
 
-/* Move to Departed when removing */
+/* Move to Departed when removing (transaction) */
 async function moveDocToDepartedAndDelete(ref){
   const now = Date.now();
   await db.runTransaction(async tx=>{
@@ -434,4 +438,42 @@ function clearAllCloud(){
     });
   }
   Promise.all([deleteAll(ACTIVE), deleteAll(DEPARTED)])
-    .catch(function(err){ console.error('Clear failed',
+    .catch(function(err){ console.error('Clear failed',err); alert('Clear failed. Check permissions.'); });
+}
+
+/* ---------------- Handlers ---------------- */
+document.getElementById('addBtn').addEventListener('click', function(){
+  if(!isAdmin()) return alert('Unlock admin first');
+  addFromStringCloud(busInput.value);
+});
+busInput.addEventListener('keydown', function(e){
+  if(!isAdmin()) return;
+  if(e.key==='Enter' || e.key===','){
+    e.preventDefault();
+    addFromStringCloud(busInput.value);
+  }
+});
+busInput.addEventListener('input', function(){
+  if(!isAdmin()) return;
+  const v = busInput.value;
+  if(v.endsWith(',') && v.trim().length>1){
+    addFromStringCloud(v.slice(0,-1));
+    busInput.value='';
+  }
+});
+document.addEventListener('click', async function(e){
+  const t=e.target;
+  if(!t || !t.hasAttribute('data-doc')) return;
+  if(!isAdmin()) return alert('Unlock admin first');
+  const docId=t.getAttribute('data-doc');
+  const label=decodeURIComponent(t.getAttribute('data-label')||'');
+  try{ await departByDocId(docId); }catch(_){ await departByLookup(label); }
+});
+document.getElementById('clearAllBtn').addEventListener('click', function(){
+  if(!isAdmin()) return alert('Unlock admin first');
+  if(confirm('Clear all entries and departed?')) clearAllCloud();
+});
+</script>
+</body>
+</html>
+
