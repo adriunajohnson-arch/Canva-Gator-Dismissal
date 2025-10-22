@@ -94,23 +94,24 @@ let db=null;
 try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); }
 catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase. Check your config."); }
 
-/* ---------------- Helpers ---------------- */
-// Split ONLY on commas; keep &, /, -, spaces, words exactly.
-function tokenize(input){
-  return String(input||'').split(',').map(s=>s.trim()).filter(Boolean);
+/* ---------------- Audio & Speech helpers ---------------- */
+let audioWarmed = false;
+function warmAudioOnce(){
+  if(audioWarmed) return;
+  audioWarmed = true;
+  try{
+    if('speechSynthesis' in window){ speechSynthesis.cancel(); speechSynthesis.resume(); }
+  }catch(e){}
 }
-// Lowercased key for de-dup (keeps symbols)
-function toKey(s){ return s.trim().toLowerCase(); }
+['click','touchstart','keydown'].forEach(evt=> window.addEventListener(evt, warmAudioOnce, {once:true}));
 
-// Convert labels to speech-friendly text (so 62/65 isn't 6,265)
+// Speak-friendly mapping (62/65 -> "62 slash 65")
 function speakify(label){
   let t = String(label);
-  // replace special symbols with words + spaces
   t = t.replace(/\//g, ' slash ');
   t = t.replace(/&/g, ' and ');
   t = t.replace(/-/g, ' dash ');
   t = t.replace(/\+/g, ' plus ');
-  // collapse extra spaces
   t = t.replace(/\s+/g, ' ').trim();
   return t;
 }
@@ -134,12 +135,12 @@ function chimeDepart(){  chime(659.25, 440.0,0.9,0.8); } // E5 + A4
 
 function speak(text){
   try{
-    if('speechSynthesis' in window){
-      var u=new SpeechSynthesisUtterance(text);
-      u.rate=1.0; u.pitch=1.0; u.lang='en-US';
-      speechSynthesis.cancel(); // cancel any queued speech to avoid overlaps
-      speechSynthesis.speak(u);
-    }
+    if(!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate=1.0; u.pitch=1.0; u.lang='en-US';
+    speechSynthesis.cancel(); // prevent overlaps
+    speechSynthesis.resume(); // iOS/Safari quirk
+    speechSynthesis.speak(u);
   }catch(e){}
 }
 
@@ -161,6 +162,7 @@ function updateAdminUI(){
   adminStatus.textContent = a ? 'Admin' : 'Viewer';
 }
 adminLoginBtn.addEventListener('click', function(){
+  warmAudioOnce();
   var p=prompt('Enter passcode'); if(p===PASSCODE){ setAdminFor1Hour(); } else if(p!==null){ alert('Incorrect passcode.'); }
 });
 lockBtn && lockBtn.addEventListener('click', clearAdmin);
@@ -186,21 +188,22 @@ var addBtn=document.getElementById('addBtn');
 var clearAllBtn=document.getElementById('clearAllBtn');
 var liveMeta=document.getElementById('liveMeta');
 
-/* Build tiles safely so special chars display correctly */
-function makeActiveTile(label){
+/* Build tiles with real doc IDs so removal is bulletproof */
+function makeActiveTile(id, label){
   const wrap=document.createElement('div');
   wrap.className='bus';
   const btn=document.createElement('button');
   btn.className='inline-btn';
-  btn.setAttribute('data-id', encodeURIComponent(label));
+  btn.setAttribute('data-doc', id);                   // exact Firestore doc id
+  btn.setAttribute('data-label', encodeURIComponent(label)); // nice fallback
   btn.textContent='Remove';
   wrap.appendChild(btn);
-  wrap.appendChild(document.createTextNode(label));
+  wrap.appendChild(document.createTextNode(label));   // displays symbols correctly
   return wrap;
 }
-function renderActive(items){
+function renderActive(items){ // items: [{id, display}]
   board.innerHTML='';
-  items.forEach(txt=> board.appendChild(makeActiveTile(txt)));
+  items.forEach(it=> board.appendChild(makeActiveTile(it.id, it.display)));
 }
 function renderDeparted(items){
   departedList.innerHTML='';
@@ -213,9 +216,6 @@ function renderDeparted(items){
 }
 
 /* ---------------- Strict newest-on-top ordering ---------------- */
-/* Each add gets a unique, strictly increasing order key: orderMs.
-   We sort by: orderMs DESC (then server/client times for safety).
-*/
 let activeLoaded=false, departedLoaded=false;
 
 if(db){
@@ -225,6 +225,7 @@ if(db){
     const list = snap.docs.map(d=>{
       const data=d.data()||{};
       return {
+        id: d.id,
         display: data.number ?? d.id,
         orderMs: typeof data.orderMs==='number' ? data.orderMs : 0,
         ts: data.createdAt?.toMillis ? data.createdAt.toMillis() : 0,
@@ -233,16 +234,17 @@ if(db){
     });
 
     list.sort((a,b)=> (b.orderMs - a.orderMs) || (b.ts - a.ts) || (b.cs - a.cs));
-    renderActive(list.map(x=>x.display));
+    renderActive(list.map(x=>({id:x.id, display:x.display})));
 
     if(!activeLoaded){ activeLoaded=true; return; }
     const added = snap.docChanges()
       .filter(c=>c.type==='added')
       .map(c=> (c.doc.data().number ?? c.doc.id));
     if(added.length){
+      // play chime then speak after a small delay
       const spoken = added.map(speakify).join(', ');
       chimeArrival();
-      speak('Bus ' + spoken + ' is now boarding');
+      setTimeout(()=> speak('Bus ' + spoken + ' is now boarding'), 200);
     }
   });
 
@@ -266,12 +268,18 @@ if(db){
     if(added.length){
       const spoken = added.map(speakify).join(', ');
       chimeDepart();
-      speak('Bus ' + spoken + ' has departed');
+      setTimeout(()=> speak('Bus ' + spoken + ' has departed'), 120);
     }
   });
 }
 
 /* ---------------- Mutations ---------------- */
+// Split ONLY on commas; keep &, /, -, spaces, words exactly.
+function tokenize(input){
+  return String(input||'').split(',').map(s=>s.trim()).filter(Boolean);
+}
+function toKey(s){ return s.trim().toLowerCase(); }
+
 async function addFromStringCloud(str){
   const tokens = tokenize(str);
   if(!tokens.length) return;
@@ -283,7 +291,7 @@ async function addFromStringCloud(str){
     const key = toKey(display);
     const snap = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
     if(snap.empty){
-      const orderMs = base + i; // strictly increasing for this batch
+      const orderMs = base + i; // strictly increasing for batch
       ops.push(
         db.collection(ACTIVE).add({
           number: display,
@@ -301,24 +309,26 @@ async function addFromStringCloud(str){
   busInput.value='';
 }
 
-async function departCloud(display){
-  const key = toKey(display);
-  const qs = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
-  if(qs.empty) return;
-  const docRef = qs.docs[0].ref;
-  const now = Date.now();
-  await db.runTransaction(async tx=>{
-    const s = await tx.get(docRef);
-    if(s.exists){
-      tx.set(db.collection(DEPARTED).doc(display+'-'+now), {
-        number: display,
-        departOrderMs: now,
-        departedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        departedAtClient: now
-      });
-      tx.delete(docRef);
-    }
-  }).catch(e=>{ console.error('Remove failed',e); alert('Remove failed. Check permissions.'); });
+async function departByDocId(docId){
+  try{ await db.collection(ACTIVE).doc(docId).delete(); }
+  catch(e){ console.error('Delete by docId failed', e); throw e; }
+}
+
+async function departByLookup(label){
+  const key = toKey(label);
+  // Try by normalized field
+  let qs = await db.collection(ACTIVE).where('numberLower','==',key).limit(5).get();
+  if(qs.empty){
+    // Try exact display label
+    qs = await db.collection(ACTIVE).where('number','==',label).limit(5).get();
+  }
+  const ops=[];
+  qs.forEach(d=> ops.push(db.collection(ACTIVE).doc(d.id).delete()));
+  if(ops.length) await Promise.all(ops);
+  else {
+    // Legacy: a doc id literally equal to the label (e.g., "62/65")
+    try{ await db.collection(ACTIVE).doc(label).delete(); }catch(e){}
+  }
 }
 
 function clearAllCloud(){
@@ -335,12 +345,14 @@ function clearAllCloud(){
 /* ---------------- Handlers (no spacebar adds) ---------------- */
 addBtn.addEventListener('click', function(){
   if(!isAdmin()) return alert('Unlock admin first');
+  warmAudioOnce();
   addFromStringCloud(busInput.value);
 });
 busInput.addEventListener('keydown', function(e){
   if(!isAdmin()) return;
   if(e.key==='Enter' || e.key===','){
     e.preventDefault();
+    warmAudioOnce();
     addFromStringCloud(busInput.value);
   }
 });
@@ -348,17 +360,26 @@ busInput.addEventListener('input', function(){
   if(!isAdmin()) return;
   const v = busInput.value;
   if(v.endsWith(',') && v.trim().length>1){
+    warmAudioOnce();
     addFromStringCloud(v.slice(0,-1));
     busInput.value='';
   }
 });
 
-document.addEventListener('click', function(e){
-  const raw = e.target && e.target.getAttribute('data-id');
-  if(!raw) return;
+// Delegated remove
+document.addEventListener('click', async function(e){
+  const t = e.target;
+  if(!t || !t.hasAttribute('data-doc')) return;
   if(!isAdmin()) return alert('Unlock admin first');
-  const label = decodeURIComponent(raw);
-  departCloud(label);
+
+  const docId = t.getAttribute('data-doc');
+  const label = decodeURIComponent(t.getAttribute('data-label')||'');
+  try{
+    await departByDocId(docId);
+  }catch(_){
+    // Fallbacks if direct doc deletion fails for any reason
+    await departByLookup(label);
+  }
 });
 
 clearAllBtn.addEventListener('click', function(){
