@@ -165,20 +165,16 @@ function primeSpeech(){
   }catch(e){}
 }
 async function enableSoundNow(){
-  // Called by full-screen gate
   audioEnabled = true;
   await waitForVoices(2500);
   pickVoice();
   primeSpeech();
-
-  // Dismiss the overlay
   const gate = document.getElementById('soundGate');
   if(gate){ gate.style.display='none'; }
 }
 document.getElementById('soundGate').addEventListener('click', enableSoundNow);
 document.getElementById('gateBtn').addEventListener('click', function(e){ e.stopPropagation(); enableSoundNow(); });
 
-// Speak-friendly mapping (62/65 -> "62 slash 65")
 function speakify(label){
   let t=String(label);
   t=t.replace(/\//g,' slash ').replace(/&/g,' and ').replace(/-/g,' dash ').replace(/\+/g,' plus ');
@@ -377,17 +373,40 @@ async function addFromStringCloud(str){
   busInput.value='';
 }
 
+/* === FIX: move to Departed when removing === */
+async function moveDocToDepartedAndDelete(ref){
+  const now = Date.now();
+  await db.runTransaction(async tx=>{
+    const snap = await tx.get(ref);
+    if(!snap.exists) return;
+    const data = snap.data() || {};
+    const label = data.number ?? snap.id;
+    tx.set(db.collection(DEPARTED).doc(label+'-'+now), {
+      number: label,
+      departOrderMs: now,
+      departedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      departedAtClient: now
+    });
+    tx.delete(ref);
+  });
+}
 async function departByDocId(docId){
-  try{ await db.collection(ACTIVE).doc(docId).delete(); }
-  catch(e){ console.error('Delete by docId failed', e); throw e; }
+  const ref = db.collection(ACTIVE).doc(docId);
+  await moveDocToDepartedAndDelete(ref);
 }
 async function departByLookup(label){
   const key = toKey(label);
   let qs = await db.collection(ACTIVE).where('numberLower','==',key).limit(5).get();
   if(qs.empty){ qs = await db.collection(ACTIVE).where('number','==',label).limit(5).get(); }
-  const ops=[]; qs.forEach(d=> ops.push(db.collection(ACTIVE).doc(d.id).delete()));
-  if(ops.length) await Promise.all(ops);
-  else { try{ await db.collection(ACTIVE).doc(label).delete(); }catch(e){} } // legacy id fallback
+  if(qs.empty){
+    // Legacy: a doc id literally equal to the label (e.g., "62/65")
+    const ref = db.collection(ACTIVE).doc(label);
+    try{ await moveDocToDepartedAndDelete(ref); }catch(e){}
+    return;
+  }
+  const ops=[];
+  qs.forEach(d=> ops.push(moveDocToDepartedAndDelete(db.collection(ACTIVE).doc(d.id))));
+  await Promise.all(ops);
 }
 
 function clearAllCloud(){
