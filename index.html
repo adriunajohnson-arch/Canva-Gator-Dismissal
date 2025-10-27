@@ -26,7 +26,7 @@ button.secondary{background:var(--accent);color:#263326}
 .muted{opacity:.85;font-size:12px}
 .hidden{display:none}
 
-/* Full-screen sound gate */
+/* Sound gate */
 #soundGate{
   position:fixed;inset:0;z-index:1000;background:linear-gradient(180deg,#2b3f34 0%,#344e41 100%);
   display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;
@@ -40,10 +40,7 @@ button.secondary{background:var(--accent);color:#263326}
 #soundGate h1{margin:0 0 8px 0;font-size:26px}
 #soundGate p{margin:6px 0 14px 0;opacity:.95}
 #soundGate .tapHint{opacity:.8;font-size:13px}
-#soundGate .gateBtn{
-  margin-top:12px;padding:12px 16px;border-radius:12px;border:1px solid var(--bd);
-  background:var(--btn);color:var(--text);font-weight:900;font-size:16px;
-}
+#soundGate .gateBtn{margin-top:12px;padding:12px 16px;border-radius:12px;border:1px solid var(--bd);background:var(--btn);color:var(--text);font-weight:900;font-size:16px;}
 </style>
 </head>
 <body>
@@ -107,7 +104,7 @@ button.secondary{background:var(--accent);color:#263326}
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
 
 <script>
-/* ---------------- Firebase Config ---------------- */
+/* ===== Firebase Config ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyAOFY5GUONFgaorwLfaCE7imj5NbN0NN0U",
   authDomain: "wcms-bus-board.firebaseapp.com",
@@ -121,60 +118,254 @@ let db=null;
 try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); }
 catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase."); }
 
-/* ---------------- Audio + Speech ---------------- */
+/* ===== Robust Audio Unlock ===== */
 let audioEnabled=false,preferredVoice=null,audioCtx=null;
 function getVoicesSafe(){try{const v=window.speechSynthesis?window.speechSynthesis.getVoices():[];return Array.isArray(v)?v:[];}catch{return[];}}
 function pickVoice(){const voices=getVoicesSafe();const prefs=["en-US","en_US","en-GB","en_GB"];let best=null;for(const p of prefs){const f=voices.find(v=>(v.lang||"").toLowerCase()===p.toLowerCase());if(f){best=f;break;}}preferredVoice=best||voices[0]||null;}
 function waitForVoices(t=3000){return new Promise(r=>{if(!('speechSynthesis'in window))return r(false);if(getVoicesSafe().length)return r(true);let done=false;const timer=setTimeout(()=>{if(!done){done=true;r(getVoicesSafe().length>0);}},t);window.speechSynthesis.onvoiceschanged=()=>{if(done)return;done=true;clearTimeout(timer);r(getVoicesSafe().length>0);};});}
-function primeSpeech(){if(!('speechSynthesis'in window))return;try{window.speechSynthesis.cancel();window.speechSynthesis.resume();const u=new SpeechSynthesisUtterance(" ");u.volume=0;u.lang="en-US";if(preferredVoice)u.voice=preferredVoice;window.speechSynthesis.speak(u);}catch{}}
-async function enableSoundNow(){const gate=document.getElementById('soundGate');if(gate){gate.classList.add('hidden');setTimeout(()=>{gate.style.display='none';},260);}try{audioEnabled=true;const Ctx=window.AudioContext||window.webkitAudioContext;if(Ctx&&!audioCtx)audioCtx=new Ctx();if(audioCtx&&audioCtx.state==='suspended'){await audioCtx.resume();}await waitForVoices(2500);pickVoice();primeSpeech();}catch(e){console.error(e);}}
-document.getElementById('soundGate').addEventListener('click',enableSoundNow);
-document.getElementById('gateBtn').addEventListener('click',e=>{e.stopPropagation();enableSoundNow();});
-function speakify(label){let t=String(label);t=t.replace(/\//g,' slash ').replace(/&/g,' and ').replace(/-/g,' dash ').replace(/\+/g,' plus ');return t.replace(/\s+/g,' ').trim();}
-async function chime(f1,f2,v,d){if(!audioEnabled)return;try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!audioCtx&&Ctx)audioCtx=new Ctx();if(!audioCtx)return;if(audioCtx.state==='suspended'){await audioCtx.resume();}const o1=audioCtx.createOscillator(),o2=audioCtx.createOscillator(),g=audioCtx.createGain();o1.type='triangle';o2.type='sine';o1.frequency.setValueAtTime(f1,audioCtx.currentTime);o2.frequency.setValueAtTime(f2,audioCtx.currentTime);g.gain.setValueAtTime(0.0001,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(v,audioCtx.currentTime+0.03);g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+d);o1.connect(g);o2.connect(g);g.connect(audioCtx.destination);o1.start();o2.start();o1.stop(audioCtx.currentTime+d);o2.stop(audioCtx.currentTime+d);}catch{}}
-function chimeArrival(){chime(1046.5,1568.0,1.0,1.5);}
-function chimeDepart(){chime(659.25,440.0,0.9,0.8);}
-function speak(text){if(!audioEnabled||!('speechSynthesis'in window))return;try{window.speechSynthesis.cancel();window.speechSynthesis.resume();const u=new SpeechSynthesisUtterance(text);u.lang='en-US';if(preferredVoice)u.voice=preferredVoice;setTimeout(()=>{window.speechSynthesis.speak(u);},10);}catch{}}
+async function unlockAudioContext(){
+  const Ctx=window.AudioContext||window.webkitAudioContext;
+  if(!Ctx) return false;
+  if(!audioCtx) audioCtx=new Ctx();
+  if(audioCtx.state==='suspended'){ try{ await audioCtx.resume(); }catch{} }
+  // Play a 1-sample silent buffer (iOS unlock trick)
+  try{
+    const buffer=audioCtx.createBuffer(1,1,22050);
+    const src=audioCtx.createBufferSource();
+    src.buffer=buffer; src.connect(audioCtx.destination); src.start(0);
+  }catch{}
+  return audioCtx.state==='running';
+}
+async function enableSoundNow(){
+  // hide overlay FIRST so teachers aren’t stuck even if audio can’t start yet
+  const gate=document.getElementById('soundGate');
+  if(gate){ gate.classList.add('hidden'); setTimeout(()=>{ if(gate) gate.style.display='none'; }, 260); }
 
-/* ---------------- Admin Controls ---------------- */
-var PASSCODE='1234';
-var adminPanel=document.getElementById('adminPanel'),adminStatus=document.getElementById('adminStatus'),
-adminLoginBtn=document.getElementById('adminLoginBtn'),lockBtn=document.getElementById('lockBtn'),
-sessionTimeLeft=document.getElementById('sessionTimeLeft');
-function isAdmin(){var v=localStorage.getItem('bus_admin_until');return v&&Number(v)>Date.now();}
-function setAdminFor1Hour(){var until=Date.now()+3600000;localStorage.setItem('bus_admin_until',String(until));updateAdminUI();}
-function clearAdmin(){localStorage.removeItem('bus_admin_until');updateAdminUI();}
-function updateAdminUI(){var a=isAdmin();adminPanel.classList.toggle('hidden',!a);adminLoginBtn.classList.toggle('hidden',a);adminStatus.textContent=a?'Admin':'Viewer';}
-adminLoginBtn.addEventListener('click',async()=>{const email=prompt('Admin email:');if(!email)return;const pass=prompt('Password:');if(!pass)return;try{await firebase.auth().signInWithEmailAndPassword(email,pass);setAdminFor1Hour();alert('Admin unlocked.');}catch(e){alert('Sign-in failed: '+(e&&e.message?e.message:e));}});
-lockBtn&&lockBtn.addEventListener('click',clearAdmin);
-setInterval(()=>{var v=localStorage.getItem('bus_admin_until');if(!v){sessionTimeLeft.textContent='Locked';return;}var ms=Number(v)-Date.now();if(ms<=0){clearAdmin();sessionTimeLeft.textContent='Locked';return;}var m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000);sessionTimeLeft.textContent='Admin: '+m+'m '+s+'s';},1000);
-updateAdminUI();
-if(firebase&&firebase.auth){firebase.auth().onAuthStateChanged(u=>{if(u&&u.email){adminStatus.textContent='Admin ('+u.email+')';}else{adminStatus.textContent='Viewer';}});}
+  try{
+    audioEnabled=true;
+    await unlockAudioContext();
+    await waitForVoices(2500);
+    pickVoice();
+    // prime a silent utterance
+    if('speechSynthesis'in window){
+      try{
+        window.speechSynthesis.cancel(); window.speechSynthesis.resume();
+        const u=new SpeechSynthesisUtterance(" "); u.volume=0; u.lang="en-US"; if(preferredVoice)u.voice=preferredVoice;
+        window.speechSynthesis.speak(u);
+      }catch{}
+    }
+  }catch(e){ console.error('Sound enable error:',e); }
+}
+['click','touchstart','pointerdown'].forEach(evt=>{
+  document.getElementById('soundGate').addEventListener(evt, enableSoundNow, {once:true});
+  document.getElementById('gateBtn').addEventListener(evt, (e)=>{e.stopPropagation(); enableSoundNow();},{once:true});
+});
 
-/* ---------------- Firestore Collections ---------------- */
-const ACTIVE='wcms_bus_board',DEPARTED='wcms_bus_departed';
-var board=document.getElementById('board'),departedList=document.getElementById('departedList'),
-busInput=document.getElementById('busInput'),addBtn=document.getElementById('addBtn'),
-clearAllBtn=document.getElementById('clearAllBtn'),liveMeta=document.getElementById('liveMeta');
-
-function makeActiveTile(id,label){const w=document.createElement('div');w.className='bus';const b=document.createElement('button');b.className='inline-btn';b.setAttribute('data-doc',id);b.setAttribute('data-label',encodeURIComponent(label));b.textContent='Remove';w.appendChild(b);w.appendChild(document.createTextNode(label));return w;}
-function renderActive(items){board.innerHTML='';items.forEach(it=>board.appendChild(makeActiveTile(it.id,it.display)));}
-function renderDeparted(items){departedList.innerHTML='';items.forEach(n=>{const e=document.createElement('div');e.className='departed-item';e.textContent=n;departedList.appendChild(e);});}
-
-if(db){
- db.collection(ACTIVE).onSnapshot(snap=>{
-  liveMeta.textContent='Cloud Firestore · '+snap.size+' entries';
-  const list=snap.docs.map(d=>({id:d.id,display:(d.data().number??d.id),orderMs:(d.data().orderMs??0)}));
-  list.sort((a,b)=>b.orderMs-a.orderMs);renderActive(list);
-  snap.docChanges().filter(c=>c.type==='added').forEach(c=>{const s=speakify(c.doc.data().number??c.doc.id);chimeArrival();setTimeout(()=>speak('Bus '+s+' now boarding'),200);});
- });
- db.collection(DEPARTED).onSnapshot(snap=>{
-  const list=snap.docs.map(d=>({display:(d.data().number??d.id),orderMs:(d.data().departOrderMs??0)}));
-  list.sort((a,b)=>b.orderMs-a.orderMs);renderDeparted(list.map(x=>x.display));
-  snap.docChanges().filter(c=>c.type==='added').forEach(c=>{const s=speakify(c.doc.data().number??c.doc.id);chimeDepart();setTimeout(()=>speak('Bus '+s+' has departed'),120);});
- });
+function speakify(label){
+  let t=String(label);
+  return t.replace(/\//g,' slash ').replace(/&/g,' and ').replace(/-/g,' dash ').replace(/\+/g,' plus ').replace(/\s+/g,' ').trim();
+}
+async function chime(f1,f2,v,d){
+  if(!audioEnabled) return;
+  try{
+    await unlockAudioContext();
+    const o1=audioCtx.createOscillator(),o2=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o1.type='triangle'; o2.type='sine';
+    o1.frequency.setValueAtTime(f1,audioCtx.currentTime);
+    o2.frequency.setValueAtTime(f2,audioCtx.currentTime);
+    g.gain.setValueAtTime(0.0001,audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(v,audioCtx.currentTime+0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+d);
+    o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
+    o1.start(); o2.start(); o1.stop(audioCtx.currentTime+d); o2.stop(audioCtx.currentTime+d);
+  }catch{}
+}
+function chimeArrival(){ chime(1046.5,1568.0,1.0,1.5); }
+function chimeDepart(){  chime(659.25, 440.0,0.9,0.8); }
+function speak(text){
+  if(!audioEnabled || !('speechSynthesis' in window)) return;
+  try{
+    window.speechSynthesis.cancel(); window.speechSynthesis.resume();
+    const u=new SpeechSynthesisUtterance(text); u.lang='en-US'; if(preferredVoice)u.voice=preferredVoice;
+    setTimeout(()=>{ try{ window.speechSynthesis.speak(u);}catch{} }, 10);
+  }catch{}
 }
 
-function tokenize(i){return String(i||'').split(',').map(s=>s.trim()).filter(Boolean);}
-function toKey(s){return s.trim().toLowerCase();}
-async function addFromStringCloud(str){const
+/* ===== Admin Controls (Auth + local 1h unlock) ===== */
+var adminPanel=document.getElementById('adminPanel'),
+    adminStatus=document.getElementById('adminStatus'),
+    adminLoginBtn=document.getElementById('adminLoginBtn'),
+    lockBtn=document.getElementById('lockBtn'),
+    sessionTimeLeft=document.getElementById('sessionTimeLeft');
+
+function isAdmin(){ var v=localStorage.getItem('bus_admin_until'); return v && Number(v)>Date.now(); }
+function setAdminFor1Hour(){ var until=Date.now()+3600000; localStorage.setItem('bus_admin_until', String(until)); updateAdminUI(); }
+function clearAdmin(){ localStorage.removeItem('bus_admin_until'); updateAdminUI(); }
+function updateAdminUI(){
+  var a=isAdmin();
+  adminPanel.classList.toggle('hidden', !a);
+  adminLoginBtn.classList.toggle('hidden', a);
+  adminStatus.textContent = a ? 'Admin' : 'Viewer';
+}
+adminLoginBtn.addEventListener('click', async ()=>{
+  const email = prompt('Admin email:'); if(!email) return;
+  const pass  = prompt('Password:');    if(!pass) return;
+  try{
+    await firebase.auth().signInWithEmailAndPassword(email, pass);
+    setAdminFor1Hour(); alert('Admin unlocked.');
+  }catch(e){ alert('Sign-in failed: ' + (e && e.message ? e.message : e)); }
+});
+lockBtn && lockBtn.addEventListener('click', clearAdmin);
+setInterval(function(){
+  var v=localStorage.getItem('bus_admin_until');
+  if(!v){ sessionTimeLeft.textContent='Locked'; return; }
+  var ms=Number(v)-Date.now();
+  if(ms<=0){ clearAdmin(); sessionTimeLeft.textContent='Locked'; return; }
+  var m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000);
+  sessionTimeLeft.textContent='Admin: '+m+'m '+s+'s';
+},1000);
+updateAdminUI();
+// Reflect signed-in user in badge
+if(firebase && firebase.auth){
+  firebase.auth().onAuthStateChanged(u=>{
+    if(u && u.email){ adminStatus.textContent='Admin ('+u.email+')'; }
+    else { adminStatus.textContent='Viewer'; }
+  });
+}
+
+/* ===== Firestore Collections & UI ===== */
+const ACTIVE='wcms_bus_board', DEPARTED='wcms_bus_departed';
+var board=document.getElementById('board'),
+    departedList=document.getElementById('departedList'),
+    busInput=document.getElementById('busInput'),
+    addBtn=document.getElementById('addBtn'),
+    clearAllBtn=document.getElementById('clearAllBtn'),
+    liveMeta=document.getElementById('liveMeta');
+
+function makeActiveTile(id,label){
+  const wrap=document.createElement('div'); wrap.className='bus';
+  const btn=document.createElement('button'); btn.className='inline-btn';
+  btn.setAttribute('data-doc', id); btn.setAttribute('data-label', encodeURIComponent(label));
+  btn.textContent='Remove'; wrap.appendChild(btn);
+  wrap.appendChild(document.createTextNode(label));
+  return wrap;
+}
+function renderActive(items){ board.innerHTML=''; items.forEach(it=> board.appendChild(makeActiveTile(it.id,it.display))); }
+function renderDeparted(items){
+  departedList.innerHTML=''; items.forEach(n=>{
+    const e=document.createElement('div'); e.className='departed-item'; e.textContent=n; departedList.appendChild(e);
+  });
+}
+
+let activeLoaded=false, departedLoaded=false;
+if(db){
+  db.collection(ACTIVE).onSnapshot(function(snap){
+    liveMeta.textContent='Cloud Firestore · '+snap.size+' entries';
+    const list = snap.docs.map(d=>{
+      const data=d.data()||{};
+      return { id:d.id, display:data.number ?? d.id, orderMs: typeof data.orderMs==='number'?data.orderMs:0 };
+    }).sort((a,b)=> b.orderMs - a.orderMs);
+    renderActive(list);
+
+    if(!activeLoaded){ activeLoaded=true; return; }
+    const added = snap.docChanges().filter(c=>c.type==='added').map(c=> (c.doc.data().number ?? c.doc.id));
+    if(added.length){ const spoken = added.map(s=>speakify(s)).join(', '); chimeArrival(); setTimeout(()=> speak('Bus '+spoken+' now boarding'), 200); }
+  });
+
+  db.collection(DEPARTED).onSnapshot(function(snap){
+    const list = snap.docs.map(d=>{
+      const data=d.data()||{};
+      return { display:data.number ?? d.id, orderMs: typeof data.departOrderMs==='number'?data.departOrderMs:0 };
+    }).sort((a,b)=> b.orderMs - a.orderMs);
+    renderDeparted(list.map(x=>x.display));
+
+    if(!departedLoaded){ departedLoaded=true; return; }
+    const added = snap.docChanges().filter(c=>c.type==='added').map(c=> (c.doc.data().number ?? c.doc.id));
+    if(added.length){ const spoken = added.map(s=>speakify(s)).join(', '); chimeDepart(); setTimeout(()=> speak('Bus '+spoken+' has departed'), 120); }
+  });
+}
+
+/* ===== Mutations ===== */
+function tokenize(input){ return String(input||'').split(',').map(s=>s.trim()).filter(Boolean); }
+function toKey(s){ return s.trim().toLowerCase(); }
+
+async function addFromStringCloud(str){
+  const tokens = tokenize(str); if(!tokens.length) return;
+  const ops = []; let base = Date.now();
+  for(let i=0;i<tokens.length;i++){
+    const display = tokens[i]; const key = toKey(display);
+    const snap = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
+    if(snap.empty){
+      const orderMs = base + i;
+      ops.push( db.collection(ACTIVE).add({
+        number: display, numberLower: key, orderMs,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAtClient: orderMs
+      }));
+    }
+  }
+  if(ops.length){
+    try{ await Promise.all(ops); }catch(e){ console.error('Add failed',e); alert('Add failed. Check permissions.'); }
+  }
+  busInput.value='';
+}
+
+async function moveDocToDepartedAndDelete(ref){
+  const now = Date.now();
+  await db.runTransaction(async tx=>{
+    const snap = await tx.get(ref);
+    if(!snap.exists) return;
+    const data = snap.data() || {};
+    const label = data.number ?? snap.id;
+    tx.set(db.collection(DEPARTED).doc(label+'-'+now), {
+      number: label, departOrderMs: now,
+      departedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      departedAtClient: now
+    });
+    tx.delete(ref);
+  });
+}
+async function departByDocId(docId){ const ref = db.collection(ACTIVE).doc(docId); await moveDocToDepartedAndDelete(ref); }
+async function departByLookup(label){
+  const key = toKey(label);
+  let qs = await db.collection(ACTIVE).where('numberLower','==',key).limit(5).get();
+  if(qs.empty){ qs = await db.collection(ACTIVE).where('number','==',label).limit(5).get(); }
+  if(qs.empty){
+    const ref = db.collection(ACTIVE).doc(label); // legacy id fallback
+    try{ await moveDocToDepartedAndDelete(ref); }catch(e){}
+    return;
+  }
+  const ops=[]; qs.forEach(d=> ops.push(moveDocToDepartedAndDelete(db.collection(ACTIVE).doc(d.id)))); await Promise.all(ops);
+}
+
+function clearAllCloud(){
+  function deleteAll(coll){ return db.collection(coll).get().then(q=> Promise.all(q.docs.map(d=> db.collection(coll).doc(d.id).delete()))); }
+  Promise.all([deleteAll(ACTIVE), deleteAll(DEPARTED)]).catch(err=>{ console.error('Clear failed',err); alert('Clear failed. Check permissions.'); });
+}
+
+/* ===== Handlers ===== */
+document.getElementById('addBtn').addEventListener('click', function(){
+  if(!isAdmin()) return alert('Unlock admin first'); addFromStringCloud(busInput.value);
+});
+busInput.addEventListener('keydown', function(e){
+  if(!isAdmin()) return;
+  if(e.key==='Enter' || e.key===','){ e.preventDefault(); addFromStringCloud(busInput.value); }
+});
+busInput.addEventListener('input', function(){
+  if(!isAdmin()) return;
+  const v = busInput.value;
+  if(v.endsWith(',') && v.trim().length>1){ addFromStringCloud(v.slice(0,-1)); busInput.value=''; }
+});
+document.addEventListener('click', async function(e){
+  const t=e.target; if(!t || !t.hasAttribute('data-doc')) return;
+  if(!isAdmin()) return alert('Unlock admin first');
+  const docId=t.getAttribute('data-doc'); const label=decodeURIComponent(t.getAttribute('data-label')||'');
+  try{ await departByDocId(docId); }catch(_){ await departByLookup(label); }
+});
+document.getElementById('clearAllBtn').addEventListener('click', function(){
+  if(!isAdmin()) return alert('Unlock admin first');
+  if(confirm('Clear all entries and departed?')) clearAllCloud();
+});
+</script>
+</body>
+</html>
