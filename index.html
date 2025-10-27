@@ -10,7 +10,8 @@
 body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial;background:var(--bg);color:var(--text)}
 header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:#2f4639;border-bottom:1px solid var(--bd)}
 .brand{display:flex;gap:10px;align-items:center;font-weight:800}
-.chip{padding:4px 8px;border-radius:999px;border:1px solid var(--bd);background:#2c4437;opacity:.95;font-size:12px}
+.chip{padding:4px 8px;border-radius:999px;border:1px solid var(--bd);background:#2c4437;opacity:.95;font-size:12px;cursor:default}
+.chip.btn{cursor:pointer;user-select:none}
 .container{max-width:1200px;margin:18px auto;padding:0 16px}
 .layout{display:grid;grid-template-columns:1fr 320px;gap:16px}
 @media (max-width:900px){.layout{grid-template-columns:1fr}}
@@ -41,15 +42,20 @@ button.secondary{background:var(--accent);color:#263326}
 #soundGate p{margin:6px 0 14px 0;opacity:.95}
 #soundGate .tapHint{opacity:.8;font-size:13px}
 #soundGate .gateBtn{margin-top:12px;padding:12px 16px;border-radius:12px;border:1px solid var(--bd);background:var(--btn);color:var(--text);font-weight:900;font-size:16px;}
+#testChime{display:none;margin:10px 0 0 0}
 </style>
 </head>
 <body>
 <!-- Sound gate overlay -->
-<div id="soundGate" role="button" aria-label="Tap to enable announcements">
+<div id="soundGate" role="button" aria-label="Tap to enable announcements"
+     onclick="window.__enableSoundNow && window.__enableSoundNow()">
   <div class="card">
     <h1>🔊 Enable Bus Announcements</h1>
     <p>This page will chime and read numbers aloud. Tap to allow sound on this device.</p>
-    <button class="gateBtn" id="gateBtn">Enable Sound</button>
+    <button class="gateBtn" id="gateBtn"
+            onclick="event.stopPropagation();window.__enableSoundNow && window.__enableSoundNow()">Enable Sound</button>
+    <button id="testChime" class="gateBtn"
+            onclick="event.stopPropagation();window.__testChime && window.__testChime()">Test Chime</button>
     <div class="tapHint">Tip: You’ll only need to do this once per device per day.</div>
   </div>
 </div>
@@ -62,6 +68,7 @@ button.secondary{background:var(--accent);color:#263326}
   <div class="row">
     <span id="syncBadge" class="chip">Sync: Cloud</span>
     <span id="adminStatus" class="chip">Viewer</span>
+    <span id="quietChip" class="chip btn" title="Toggle announcements (mute/unmute)">🔇 Quiet Mode: Off</span>
     <button id="adminLoginBtn" class="secondary">Admin Login</button>
   </div>
 </header>
@@ -118,80 +125,37 @@ let db=null;
 try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); }
 catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase."); }
 
-/* ===== Robust Audio Unlock ===== */
+/* ===== Audio + Announcement Controls ===== */
 let audioEnabled=false,preferredVoice=null,audioCtx=null;
+let audioMuted=false;                       // manual mute (Quiet Mode)
+let bulkMuteCounter=0;                      // auto-mute during bulk ops
+let speakQueue=[]; let speakBusy=false;
+const quietChip=document.getElementById('quietChip');
+
+function isAudioAllowed(){ return audioEnabled && !audioMuted && bulkMuteCounter===0; }
+function setQuietMode(on){
+  audioMuted = !!on;
+  quietChip.textContent = audioMuted ? "🔇 Quiet Mode: On" : "🔊 Quiet Mode: Off";
+}
+quietChip.addEventListener('click', ()=> setQuietMode(!audioMuted));
+function bulkMute(on){ bulkMuteCounter = Math.max(0, bulkMuteCounter + (on?1:-1)); }
+
 function getVoicesSafe(){try{const v=window.speechSynthesis?window.speechSynthesis.getVoices():[];return Array.isArray(v)?v:[];}catch{return[];}}
 function pickVoice(){const voices=getVoicesSafe();const prefs=["en-US","en_US","en-GB","en_GB"];let best=null;for(const p of prefs){const f=voices.find(v=>(v.lang||"").toLowerCase()===p.toLowerCase());if(f){best=f;break;}}preferredVoice=best||voices[0]||null;}
 function waitForVoices(t=3000){return new Promise(r=>{if(!('speechSynthesis'in window))return r(false);if(getVoicesSafe().length)return r(true);let done=false;const timer=setTimeout(()=>{if(!done){done=true;r(getVoicesSafe().length>0);}},t);window.speechSynthesis.onvoiceschanged=()=>{if(done)return;done=true;clearTimeout(timer);r(getVoicesSafe().length>0);};});}
-async function unlockAudioContext(){
-  const Ctx=window.AudioContext||window.webkitAudioContext;
-  if(!Ctx) return false;
-  if(!audioCtx) audioCtx=new Ctx();
-  if(audioCtx.state==='suspended'){ try{ await audioCtx.resume(); }catch{} }
-  // Play a 1-sample silent buffer (iOS unlock trick)
-  try{
-    const buffer=audioCtx.createBuffer(1,1,22050);
-    const src=audioCtx.createBufferSource();
-    src.buffer=buffer; src.connect(audioCtx.destination); src.start(0);
-  }catch{}
-  return audioCtx.state==='running';
-}
-async function enableSoundNow(){
-  // hide overlay FIRST so teachers aren’t stuck even if audio can’t start yet
-  const gate=document.getElementById('soundGate');
-  if(gate){ gate.classList.add('hidden'); setTimeout(()=>{ if(gate) gate.style.display='none'; }, 260); }
+async function unlockAudioContext(){ const Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return false; if(!audioCtx) audioCtx=new Ctx(); if(audioCtx.state==='suspended'){ try{ await audioCtx.resume(); }catch{} } try{ const buffer=audioCtx.createBuffer(1,1,22050); const src=audioCtx.createBufferSource(); src.buffer=buffer; src.connect(audioCtx.destination); src.start(0);}catch{} return audioCtx.state==='running'; }
+function hideGate(){ const gate=document.getElementById('soundGate'); if(!gate) return; gate.classList.add('hidden'); setTimeout(()=>{ if(gate) gate.style.display='none'; }, 260); }
+async function enableSoundNow(){ try{ hideGate(); audioEnabled=true; await unlockAudioContext(); await waitForVoices(2500); pickVoice(); const t=document.getElementById('testChime'); if(t) t.style.display='inline-block'; if('speechSynthesis'in window){ try{ window.speechSynthesis.cancel(); window.speechSynthesis.resume(); const u=new SpeechSynthesisUtterance(" "); u.volume=0; u.lang="en-US"; if(preferredVoice)u.voice=preferredVoice; window.speechSynthesis.speak(u);}catch{} } }catch(e){ console.error('Sound enable error:', e); } }
+window.__enableSoundNow = enableSoundNow;
+window.__testChime = ()=> chime(880,1320,1.0,0.8);
 
-  try{
-    audioEnabled=true;
-    await unlockAudioContext();
-    await waitForVoices(2500);
-    pickVoice();
-    // prime a silent utterance
-    if('speechSynthesis'in window){
-      try{
-        window.speechSynthesis.cancel(); window.speechSynthesis.resume();
-        const u=new SpeechSynthesisUtterance(" "); u.volume=0; u.lang="en-US"; if(preferredVoice)u.voice=preferredVoice;
-        window.speechSynthesis.speak(u);
-      }catch{}
-    }
-  }catch(e){ console.error('Sound enable error:',e); }
-}
-['click','touchstart','pointerdown'].forEach(evt=>{
-  document.getElementById('soundGate').addEventListener(evt, enableSoundNow, {once:true});
-  document.getElementById('gateBtn').addEventListener(evt, (e)=>{e.stopPropagation(); enableSoundNow();},{once:true});
-});
+function speakify(label){ let t=String(label); return t.replace(/\//g,' slash ').replace(/&/g,' and ').replace(/-/g,' dash ').replace(/\+/g,' plus ').replace(/\s+/g,' ').trim(); }
+async function chime(f1,f2,v,d){ if(!isAudioAllowed()) return; try{ await unlockAudioContext(); const o1=audioCtx.createOscillator(),o2=audioCtx.createOscillator(),g=audioCtx.createGain(); o1.type='triangle'; o2.type='sine'; o1.frequency.setValueAtTime(f1,audioCtx.currentTime); o2.frequency.setValueAtTime(f2,audioCtx.currentTime); g.gain.setValueAtTime(0.0001,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(v,audioCtx.currentTime+0.03); g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+d); o1.connect(g); o2.connect(g); g.connect(audioCtx.destination); o1.start(); o2.start(); o1.stop(audioCtx.currentTime+d); o2.stop(audioCtx.currentTime+d); }catch{} }
+function speakNow(text){ if(!isAudioAllowed() || !('speechSynthesis' in window)) return; try{ window.speechSynthesis.cancel(); window.speechSynthesis.resume(); const u=new SpeechSynthesisUtterance(text); u.lang='en-US'; if(preferredVoice)u.voice=preferredVoice; window.speechSynthesis.speak(u);}catch{} }
+function enqueueSpeak(text){ speakQueue.push(text); drainSpeakQueue(); }
+function drainSpeakQueue(){ if(speakBusy || !isAudioAllowed()) return; const next = speakQueue.shift(); if(!next) return; speakBusy=true; chime(1046.5,1568.0,1.0,1.2); setTimeout(()=>{ speakNow(next); setTimeout(()=>{ speakBusy=false; drainSpeakQueue(); }, 1200); }, 180); }
 
-function speakify(label){
-  let t=String(label);
-  return t.replace(/\//g,' slash ').replace(/&/g,' and ').replace(/-/g,' dash ').replace(/\+/g,' plus ').replace(/\s+/g,' ').trim();
-}
-async function chime(f1,f2,v,d){
-  if(!audioEnabled) return;
-  try{
-    await unlockAudioContext();
-    const o1=audioCtx.createOscillator(),o2=audioCtx.createOscillator(),g=audioCtx.createGain();
-    o1.type='triangle'; o2.type='sine';
-    o1.frequency.setValueAtTime(f1,audioCtx.currentTime);
-    o2.frequency.setValueAtTime(f2,audioCtx.currentTime);
-    g.gain.setValueAtTime(0.0001,audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(v,audioCtx.currentTime+0.03);
-    g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+d);
-    o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
-    o1.start(); o2.start(); o1.stop(audioCtx.currentTime+d); o2.stop(audioCtx.currentTime+d);
-  }catch{}
-}
-function chimeArrival(){ chime(1046.5,1568.0,1.0,1.5); }
-function chimeDepart(){  chime(659.25, 440.0,0.9,0.8); }
-function speak(text){
-  if(!audioEnabled || !('speechSynthesis' in window)) return;
-  try{
-    window.speechSynthesis.cancel(); window.speechSynthesis.resume();
-    const u=new SpeechSynthesisUtterance(text); u.lang='en-US'; if(preferredVoice)u.voice=preferredVoice;
-    setTimeout(()=>{ try{ window.speechSynthesis.speak(u);}catch{} }, 10);
-  }catch{}
-}
-
-/* ===== Admin Controls (Auth + local 1h unlock) ===== */
+/* ===== Admin (Auth + local 1h unlock) ===== */
 var adminPanel=document.getElementById('adminPanel'),
     adminStatus=document.getElementById('adminStatus'),
     adminLoginBtn=document.getElementById('adminLoginBtn'),
@@ -201,19 +165,12 @@ var adminPanel=document.getElementById('adminPanel'),
 function isAdmin(){ var v=localStorage.getItem('bus_admin_until'); return v && Number(v)>Date.now(); }
 function setAdminFor1Hour(){ var until=Date.now()+3600000; localStorage.setItem('bus_admin_until', String(until)); updateAdminUI(); }
 function clearAdmin(){ localStorage.removeItem('bus_admin_until'); updateAdminUI(); }
-function updateAdminUI(){
-  var a=isAdmin();
-  adminPanel.classList.toggle('hidden', !a);
-  adminLoginBtn.classList.toggle('hidden', a);
-  adminStatus.textContent = a ? 'Admin' : 'Viewer';
-}
+function updateAdminUI(){ var a=isAdmin(); adminPanel.classList.toggle('hidden', !a); adminLoginBtn.classList.toggle('hidden', a); adminStatus.textContent = a ? 'Admin' : 'Viewer'; }
 adminLoginBtn.addEventListener('click', async ()=>{
   const email = prompt('Admin email:'); if(!email) return;
   const pass  = prompt('Password:');    if(!pass) return;
-  try{
-    await firebase.auth().signInWithEmailAndPassword(email, pass);
-    setAdminFor1Hour(); alert('Admin unlocked.');
-  }catch(e){ alert('Sign-in failed: ' + (e && e.message ? e.message : e)); }
+  try{ await firebase.auth().signInWithEmailAndPassword(email, pass); setAdminFor1Hour(); alert('Admin unlocked.'); }
+  catch(e){ alert('Sign-in failed: ' + (e && e.message ? e.message : e)); }
 });
 lockBtn && lockBtn.addEventListener('click', clearAdmin);
 setInterval(function(){
@@ -225,7 +182,7 @@ setInterval(function(){
   sessionTimeLeft.textContent='Admin: '+m+'m '+s+'s';
 },1000);
 updateAdminUI();
-// Reflect signed-in user in badge
+// Reflect signed-in user
 if(firebase && firebase.auth){
   firebase.auth().onAuthStateChanged(u=>{
     if(u && u.email){ adminStatus.textContent='Admin ('+u.email+')'; }
@@ -269,7 +226,7 @@ if(db){
 
     if(!activeLoaded){ activeLoaded=true; return; }
     const added = snap.docChanges().filter(c=>c.type==='added').map(c=> (c.doc.data().number ?? c.doc.id));
-    if(added.length){ const spoken = added.map(s=>speakify(s)).join(', '); chimeArrival(); setTimeout(()=> speak('Bus '+spoken+' now boarding'), 200); }
+    if(added.length){ const spoken = added.map(s=>speakify(s)).join(', '); enqueueSpeak('Bus '+spoken+' now boarding'); }
   });
 
   db.collection(DEPARTED).onSnapshot(function(snap){
@@ -281,14 +238,17 @@ if(db){
 
     if(!departedLoaded){ departedLoaded=true; return; }
     const added = snap.docChanges().filter(c=>c.type==='added').map(c=> (c.doc.data().number ?? c.doc.id));
-    if(added.length){ const spoken = added.map(s=>speakify(s)).join(', '); chimeDepart(); setTimeout(()=> speak('Bus '+spoken+' has departed'), 120); }
+    if(added.length){ const spoken = added.map(s=>speakify(s)).join(', '); // different chime for depart
+      if(isAudioAllowed()){ chime(659.25,440.0,0.9,0.8); setTimeout(()=> speakNow('Bus '+spoken+' has departed'), 120); }
+    }
   });
 }
 
-/* ===== Mutations ===== */
+/* ===== Helpers ===== */
 function tokenize(input){ return String(input||'').split(',').map(s=>s.trim()).filter(Boolean); }
 function toKey(s){ return s.trim().toLowerCase(); }
 
+/* ===== Adds ===== */
 async function addFromStringCloud(str){
   const tokens = tokenize(str); if(!tokens.length) return;
   const ops = []; let base = Date.now();
@@ -305,11 +265,15 @@ async function addFromStringCloud(str){
     }
   }
   if(ops.length){
-    try{ await Promise.all(ops); }catch(e){ console.error('Add failed',e); alert('Add failed. Check permissions.'); }
+    try{ await Promise.all(ops); }catch(e){
+      console.error('Add failed',e);
+      alert('Add failed. Are you signed in with an admin email and do rules allow writes?');
+    }
   }
   busInput.value='';
 }
 
+/* ===== Depart / Remove ===== */
 async function moveDocToDepartedAndDelete(ref){
   const now = Date.now();
   await db.runTransaction(async tx=>{
@@ -338,14 +302,66 @@ async function departByLookup(label){
   const ops=[]; qs.forEach(d=> ops.push(moveDocToDepartedAndDelete(db.collection(ACTIVE).doc(d.id)))); await Promise.all(ops);
 }
 
-function clearAllCloud(){
-  function deleteAll(coll){ return db.collection(coll).get().then(q=> Promise.all(q.docs.map(d=> db.collection(coll).doc(d.id).delete()))); }
-  Promise.all([deleteAll(ACTIVE), deleteAll(DEPARTED)]).catch(err=>{ console.error('Clear failed',err); alert('Clear failed. Check permissions.'); });
+/* ===== Paged, Batched Clear (auto-muted) ===== */
+async function deleteCollectionPaged(collPath, batchSize=300){
+  let total = 0;
+  while(true){
+    const snap = await db.collection(collPath)
+      .orderBy(firebase.firestore.FieldPath.documentId())
+      .limit(batchSize)
+      .get();
+
+    if (snap.empty) break;
+
+    const batch = db.batch();
+    snap.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    total += snap.size;
+
+    await new Promise(r=>setTimeout(r,40));
+  }
+  return total;
+}
+
+async function clearAllCloud(){
+  if(!isAdmin()){
+    alert('Unlock admin first (Admin Login). You must be signed in with an admin email.');
+    return;
+  }
+  if(!confirm('Clear ALL current and departed entries? This cannot be undone.')) return;
+
+  clearAllBtn.disabled = true;
+  clearAllBtn.textContent = 'Clearing...';
+
+  bulkMute(true);           // 🔇 auto-mute announcements during the whole clear
+  const prevMuted = audioMuted; setQuietMode(true);
+
+  try{
+    const [aCount, dCount] = await Promise.all([
+      deleteCollectionPaged(ACTIVE, 400),
+      deleteCollectionPaged(DEPARTED, 400),
+    ]);
+    alert(`Cleared ${aCount} active + ${dCount} departed entries.`);
+  }catch(e){
+    console.error('Clear failed', e);
+    const msg = (e && e.message) ? e.message : String(e);
+    if (/PERMISSION_DENIED|Missing or insufficient permissions/i.test(msg)) {
+      alert('Clear failed: permissions. Make sure:\n• You used Admin Login (Firebase Auth)\n• Your Firestore rules allow admin deletes\n• Your site domain is in Auth > Settings > Authorized domains');
+    } else {
+      alert('Clear failed: '+ msg);
+    }
+  }finally{
+    clearAllBtn.disabled = false;
+    clearAllBtn.textContent = 'Clear All';
+    bulkMute(false);        // release auto-mute
+    setQuietMode(prevMuted);// restore manual mute state
+  }
 }
 
 /* ===== Handlers ===== */
 document.getElementById('addBtn').addEventListener('click', function(){
-  if(!isAdmin()) return alert('Unlock admin first'); addFromStringCloud(busInput.value);
+  if(!isAdmin()) return alert('Unlock admin first');
+  addFromStringCloud(busInput.value);
 });
 busInput.addEventListener('keydown', function(e){
   if(!isAdmin()) return;
@@ -362,9 +378,14 @@ document.addEventListener('click', async function(e){
   const docId=t.getAttribute('data-doc'); const label=decodeURIComponent(t.getAttribute('data-label')||'');
   try{ await departByDocId(docId); }catch(_){ await departByLookup(label); }
 });
-document.getElementById('clearAllBtn').addEventListener('click', function(){
-  if(!isAdmin()) return alert('Unlock admin first');
-  if(confirm('Clear all entries and departed?')) clearAllCloud();
+document.getElementById('clearAllBtn').addEventListener('click', clearAllCloud);
+
+// Also bind after DOM ready just in case
+document.addEventListener('DOMContentLoaded', ()=> {
+  const g=document.getElementById('soundGate');
+  const b=document.getElementById('gateBtn');
+  if(g) g.addEventListener('click', enableSoundNow, {once:true});
+  if(b) b.addEventListener('click', (e)=>{e.stopPropagation(); enableSoundNow();}, {once:true});
 });
 </script>
 </body>
