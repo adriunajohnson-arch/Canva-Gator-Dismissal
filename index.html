@@ -3,115 +3,208 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>WCMS Bus Dismissal Board — Cloud Sync</title>
-<style>
-:root{--bg:#344e41;--panel:#3a5a40;--btn:#588157;--accent:#a3b18a;--text:#dad7cd;--bd:#274033;--tile:#2f4639}
-*{box-sizing:border-box}
-body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial;background:var(--bg);color:var(--text)}
-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:#2f4639;border-bottom:1px solid var(--bd)}
-.brand{display:flex;gap:10px;align-items:center;font-weight:800}
-.chip{padding:4px 8px;border-radius:999px;border:1px solid var(--bd);background:#2c4437;opacity:.95;font-size:12px;cursor:default}
-.chip.btn{cursor:pointer;user-select:none}
-.container{max-width:1200px;margin:18px auto;padding:0 16px}
-.layout{display:grid;grid-template-columns:1fr 320px;gap:16px}
-@media (max-width:900px){.layout{grid-template-columns:1fr}}
-.panel{background:var(--panel);border:1px solid var(--bd);border-radius:16px;padding:14px;box-shadow:0 8px 24px #0005}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:12px}
-.bus{position:relative;background:var(--tile);border:1px solid var(--bd);border-radius:14px;padding:24px 14px;text-align:center;font-weight:900;font-size:32px}
-.inline-btn{position:absolute;top:8px;right:8px;font-size:12px;padding:6px 8px;border-radius:10px;border:1px solid var(--bd);background:var(--panel);color:var(--text);cursor:pointer}
-.departed-item{background:var(--tile);border:1px solid var(--bd);border-radius:12px;padding:8px 10px;margin-top:8px;display:flex;justify-content:space-between}
-input{background:#263b30;color:var(--text);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none;min-width:260px}
-button{cursor:pointer;font-weight:800;border-radius:12px;padding:10px 14px;border:1px solid var(--bd);background:var(--btn);color:var(--text)}
-button.secondary{background:var(--accent);color:#263326}
-.muted{opacity:.85;font-size:12px}
-.hidden{display:none}
+<title>WCMS Dismissal Board</title>
 
-/* Sound gate */
+<style>
+:root{
+  --cream:#fbf6ec;
+  --cream2:#fffaf2;
+  --card:#fffdf8;
+  --green:#2f5f45;
+  --green2:#3f7a56;
+  --sage:#a3b18a;
+  --gold:#c9941a;
+  --ink:#244638;
+  --muted:#7b7569;
+  --line:#eadfcd;
+  --shadow:0 18px 45px rgba(53,64,50,.14);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial;
+  background:
+    radial-gradient(circle at top left, rgba(224,177,58,.18), transparent 38%),
+    radial-gradient(circle at top right, rgba(163,177,138,.22), transparent 34%),
+    var(--cream);
+  color:var(--ink);
+}
+button{
+  cursor:pointer;font-weight:800;border-radius:999px;padding:10px 14px;
+  border:1px solid var(--line);background:var(--green);color:#fff;
+  box-shadow:0 8px 18px rgba(47,95,69,.14)
+}
+button.secondary{background:var(--card);color:var(--ink)}
+button.danger{background:#8b3d33;color:#fff}
+button.small{padding:7px 10px;font-size:12px}
+button:disabled{opacity:.55;cursor:not-allowed}
+input{
+  background:#fffdf8;color:var(--ink);border:1px solid var(--line);border-radius:14px;
+  padding:12px 14px;outline:none;min-width:270px;box-shadow:inset 0 1px 2px rgba(0,0,0,.03)
+}
+.hidden{display:none!important}
+.chip{
+  display:inline-flex;gap:7px;align-items:center;padding:9px 12px;border-radius:999px;
+  border:1px solid var(--line);background:rgba(255,253,248,.86);
+  box-shadow:0 8px 18px rgba(53,64,50,.08);
+  color:var(--ink);font-size:13px;font-weight:800
+}
+.topbar{
+  position:relative;z-index:2;display:flex;justify-content:flex-end;align-items:center;gap:10px;
+  padding:16px 22px 0 22px;flex-wrap:wrap
+}
+.hero{
+  position:relative;overflow:hidden;min-height:300px;padding:18px 24px 34px 24px;
+  display:flex;align-items:center;justify-content:center;text-align:center;border-bottom:1px solid rgba(234,223,205,.8)
+}
+.hero:before{
+  content:"";position:absolute;left:32px;top:28px;width:290px;height:230px;opacity:.43;
+  background:
+    url("data:image/svg+xml,%3Csvg width='500' height='360' viewBox='0 0 500 360' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%232f5f45' stroke-width='5' stroke-linecap='round' stroke-linejoin='round' opacity='.9'%3E%3Cpath d='M75 235c55-60 102-90 156-84 36 4 63 24 93 58 22 26 48 44 83 39 31-4 45-24 47-44-29 21-58 18-89-7-40-32-70-76-128-80-74-5-123 37-185 101'/%3E%3Cpath d='M65 235c41-21 80-25 119-5 48 25 93 49 152 39 44-7 80-29 104-63'/%3E%3Cpath d='M70 237c-22 4-36 15-47 35 34 2 60-6 80-25'/%3E%3Cpath d='M104 234c-16 31-17 55-4 80 25-20 35-46 31-78'/%3E%3Cpath d='M202 250c-9 34-5 59 13 77 20-27 25-55 11-83'/%3E%3Cpath d='M325 253c4 31 18 51 43 64 7-29-1-52-25-69'/%3E%3Cpath d='M68 214l-42-11 37-11'/%3E%3Cpath d='M78 200c38-19 73-20 104-3'/%3E%3Cpath d='M98 190c-18-24-17-47 3-69 14 25 31 43 53 54'/%3E%3Cpath d='M135 174c5-35 27-55 65-61-3 30-15 52-36 66'/%3E%3Cpath d='M185 169c19-35 49-52 90-51-14 31-36 51-68 60'/%3E%3Cpath d='M246 178c32-25 65-31 100-18-26 24-55 34-88 27'/%3E%3Cpath d='M40 273l28-11M57 293l33-17M92 306l16-32M140 298l8-37M219 309l-1-42M367 296l-23-32'/%3E%3Cpath d='M99 213c6-6 15-6 21 0M110 205v1'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat;
+}
+.hero:after{
+  content:"";position:absolute;right:-20px;top:42px;width:310px;height:270px;opacity:.20;
+  background:
+    url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%232f5f45' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M190 350C170 245 195 140 278 42'/%3E%3Cpath d='M190 350c-48-80-101-135-158-164'/%3E%3Cpath d='M207 288c45-34 88-54 129-59'/%3E%3Cpath d='M214 247c34-48 66-79 96-93'/%3E%3Cpath d='M223 205c16-63 35-104 58-124'/%3E%3Cpath d='M175 275c-57-21-94-46-112-75'/%3E%3Cpath d='M171 235c-54-52-81-91-83-119'/%3E%3Cpath d='M174 196c-28-59-38-104-29-137'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat;
+}
+.heroTitle{position:relative;z-index:1}
+.heroTitle .wcms{font-size:clamp(70px,13vw,165px);line-height:.8;letter-spacing:.06em;font-weight:300;color:var(--gold);font-family:"Trebuchet MS", system-ui, sans-serif}
+.heroTitle .subtitle{font-size:clamp(28px,4vw,58px);font-weight:800;letter-spacing:.18em;color:var(--green);margin-top:22px}
+.heroTitle .rule{display:flex;align-items:center;justify-content:center;gap:18px;margin:22px auto 0;color:var(--gold)}
+.heroTitle .rule span{height:2px;background:var(--gold);width:150px;display:block}.heroTitle .rule b{font-size:28px;line-height:0}
+.container{max-width:1480px;margin:0 auto;padding:26px 32px 34px}
+.layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(340px,.72fr);gap:24px}
+@media (max-width:980px){.layout{grid-template-columns:1fr}.topbar{justify-content:center}.hero:before{opacity:.18}.hero:after{opacity:.10}}
+.panel{
+  background:rgba(255,253,248,.94);border:1px solid var(--line);border-radius:26px;padding:28px;
+  box-shadow:var(--shadow);backdrop-filter:blur(8px)
+}
+.panelHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px}
+.panelTitle{display:flex;align-items:center;gap:16px}
+.iconCircle{width:58px;height:58px;border-radius:999px;background:linear-gradient(180deg,var(--green2),var(--green));display:grid;place-items:center;color:#fff;font-size:26px;box-shadow:0 10px 24px rgba(47,95,69,.24)}
+h2,h3{margin:0;font-size:32px;color:var(--green);letter-spacing:.06em}
+.underline{width:125px;height:2px;background:var(--gold);margin-top:8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px}
+.bus{
+  position:relative;min-height:118px;background:linear-gradient(180deg,#fffdf8,#fffaf2);border:1px solid var(--line);
+  border-radius:18px;box-shadow:0 10px 20px rgba(53,64,50,.07);display:flex;align-items:center;justify-content:center;
+  color:var(--green);font-size:42px;font-weight:900;text-align:center;padding:20px
+}
+.bus:after{content:"";position:absolute;bottom:22px;width:46px;height:3px;background:var(--gold);border-radius:99px}
+.inline-btn{position:absolute;top:10px;right:10px;font-size:12px;padding:6px 9px;border-radius:999px;background:var(--green);color:#fff;border:0;box-shadow:none}
+.departed-item{
+  background:#fffdf8;border:1px solid var(--line);border-radius:15px;padding:14px 16px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;
+  color:var(--green);font-weight:800
+}
+.departed-item:after{content:"✓";color:var(--green);border:1px solid var(--green);width:21px;height:21px;border-radius:50%;display:grid;place-items:center;font-size:13px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+#adminPanel{margin-bottom:24px}
+.soundNote{margin-top:20px;color:var(--muted);display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.soundNote b{color:var(--green)}
 #soundGate{
-  position:fixed;inset:0;z-index:1000;background:linear-gradient(180deg,#2b3f34 0%,#344e41 100%);
+  position:fixed;inset:0;z-index:1000;background:linear-gradient(180deg,#fffaf2,#fbf6ec);
   display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;
-  padding:24px;cursor:pointer;transition:opacity .25s ease;
+  padding:24px;cursor:pointer;transition:opacity .25s ease
 }
 #soundGate.hidden{opacity:0;pointer-events:none}
-#soundGate .card{
-  background:#263b30;border:1px solid var(--bd);border-radius:16px;max-width:560px;width:min(92%,560px);
-  padding:24px 20px;box-shadow:0 12px 40px #0007;
-}
-#soundGate h1{margin:0 0 8px 0;font-size:26px}
-#soundGate p{margin:6px 0 14px 0;opacity:.95}
-#soundGate .tapHint{opacity:.8;font-size:13px}
-#soundGate .gateBtn{margin-top:12px;padding:12px 16px;border-radius:12px;border:1px solid var(--bd);background:var(--btn);color:var(--text);font-weight:900;font-size:16px;}
-#testChime{display:none;margin:10px 0 0 0}
+#soundGate .card{background:#fffdf8;border:1px solid var(--line);border-radius:26px;max-width:620px;width:min(92%,620px);padding:34px 28px;box-shadow:var(--shadow)}
+#soundGate h1{margin:0 0 10px;font-size:34px;color:var(--green)}
+#soundGate p{margin:8px 0 18px;color:var(--muted)}
+#soundGate .gateBtn{background:var(--green);color:#fff;border:0;font-size:18px}
+.modalBack{position:fixed;inset:0;background:rgba(36,70,56,.35);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:24px;max-width:560px;width:min(96%,560px);padding:24px;box-shadow:var(--shadow)}
+.adminItem{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0;background:#fffaf2}
+.emailSmall{font-size:12px;color:var(--muted)}
 </style>
 </head>
+
 <body>
-<!-- Sound gate overlay -->
-<div id="soundGate" role="button" aria-label="Tap to enable announcements"
-     onclick="window.__enableSoundNow && window.__enableSoundNow()">
+<div id="soundGate" role="button" aria-label="Tap to enable announcements">
   <div class="card">
     <h1>🔊 Enable Bus Announcements</h1>
     <p>This page will chime and read numbers aloud. Tap to allow sound on this device.</p>
-    <button class="gateBtn" id="gateBtn"
-            onclick="event.stopPropagation();window.__enableSoundNow && window.__enableSoundNow()">Enable Sound</button>
-    <button id="testChime" class="gateBtn"
-            onclick="event.stopPropagation();window.__testChime && window.__testChime()">Test Chime</button>
-    <div class="tapHint">Tip: You’ll only need to do this once per device per day.</div>
+    <button class="gateBtn" id="gateBtn">Enable Sound</button>
+    <div class="muted" style="margin-top:12px">Tip: Teachers only need to do this once per device each session.</div>
   </div>
 </div>
 
-<header>
-  <div class="brand">
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 13h18v3a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-3Z" stroke="#a3b18a" stroke-width="1.5"/><path d="M5 9.5h14a2 2 0 0 1 2 2V13H3v-1.5a2 2 0 0 1 2-2Z" fill="#2f4639" stroke="#a3b18a" stroke-width="1.5"/><circle cx="7" cy="18.5" r="1.7" fill="#a3b18a"/><circle cx="17" cy="18.5" r="1.7" fill="#a3b18a"/></svg>
-    <span>WCMS Bus Dismissal Board</span>
+<div class="topbar">
+  <span id="syncBadge" class="chip">☁️ Sync: Cloud</span>
+  <span id="adminStatus" class="chip">👤 Viewer</span>
+  <button id="googleBtn">Sign in with Google</button>
+  <button id="adminSettingsBtn" class="secondary hidden">Admin Settings</button>
+  <button id="signOutBtn" class="secondary hidden">Sign Out</button>
+</div>
+
+<section class="hero">
+  <div class="heroTitle">
+    <div class="wcms">WCMS</div>
+    <div class="subtitle">DISMISSAL BOARD</div>
+    <div class="rule"><span></span><b>•</b><span></span></div>
   </div>
-  <div class="row">
-    <span id="syncBadge" class="chip">Sync: Cloud</span>
-    <span id="adminStatus" class="chip">Viewer</span>
-    <span id="quietChip" class="chip btn" title="Toggle announcements (mute/unmute)">🔇 Quiet Mode: Off</span>
-    <button id="adminLoginBtn" class="secondary">Admin Login</button>
-  </div>
-</header>
+</section>
 
 <div class="container">
   <div id="adminPanel" class="panel hidden" aria-live="polite">
     <div class="row" style="justify-content:space-between;width:100%">
-      <strong>Admin Controls</strong>
+      <strong style="font-size:20px;color:var(--green)">Admin Controls</strong>
       <div class="row">
-        <span id="sessionTimeLeft" class="chip">Admin: --</span>
-        <button id="lockBtn">Lock Now</button>
+        <span id="sessionTimeLeft" class="chip">Signed in</span>
       </div>
     </div>
-    <div class="row" style="margin-top:8px">
-      <input id="busInput" placeholder="Type entries separated by commas (e.g., 102, Car & Van, 62/65, A/B)" />
+    <div class="row" style="margin-top:14px">
+      <input id="busInput" placeholder="Type entries separated by commas (e.g., 102, Car & Van, 62/65, A/B)." />
       <button id="addBtn">Add to Board</button>
-      <button id="clearAllBtn">Clear All</button>
+      <button id="clearAllBtn" class="danger">Clear All</button>
     </div>
-    <div class="muted">Accepts words & symbols (/, &, -). Newest on top. Chime + voice on add & depart.</div>
+    <div class="muted" style="margin-top:10px">Accepts words & symbols (/, &, -). Newest entries appear first. Press Enter or comma to add.</div>
   </div>
 
   <div class="layout">
     <div class="panel">
-      <div class="row" style="justify-content:space-between;align-items:center">
-        <h2 style="margin:0">Now Boarding</h2>
-        <span class="muted" id="liveMeta">Cloud Firestore</span>
+      <div class="panelHead">
+        <div class="panelTitle"><div class="iconCircle">🚌</div><div><h2>NOW BOARDING</h2><div class="underline"></div></div></div>
+        <span class="chip" id="liveMeta">● Live Updates</span>
       </div>
       <div id="board" class="grid" aria-live="assertive"></div>
+      <div class="soundNote"><b>🔊 New entries will chime and be announced.</b><span>|</span><span>Admins click “Remove” to mark as departed.</span></div>
     </div>
+
     <aside class="panel" aria-live="polite">
-      <h3 style="margin:0 0 8px 0">Departed</h3>
+      <div class="panelHead">
+        <div class="panelTitle"><div class="iconCircle">⚑</div><div><h3>DEPARTED</h3><div class="underline"></div></div></div>
+      </div>
       <div id="departedList"></div>
+      <div class="soundNote"><b>⏱ Most recent departures appear at the top.</b></div>
     </aside>
   </div>
 </div>
 
-<!-- Firebase SDKs -->
+<div id="adminModal" class="modalBack hidden">
+  <div class="modal">
+    <div class="row" style="justify-content:space-between">
+      <h3 style="font-size:24px">Admin Settings</h3>
+      <button id="closeAdminModal" class="secondary small">Close</button>
+    </div>
+    <p class="muted">Add administrators by the exact Google email they will use to sign in.</p>
+
+    <div id="adminList"></div>
+
+    <div class="row" style="margin-top:16px">
+      <input id="newAdminEmail" placeholder="administrator@ware.k12.ga.us" />
+      <button id="addAdminBtn">Add Admin</button>
+    </div>
+    <p class="muted">Your owner account is always allowed: adriuna.johnson@ware.k12.ga.us</p>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 
 <script>
-/* ===== Firebase Config ===== */
+const OWNER_EMAIL = "adriuna.johnson@ware.k12.ga.us";
+
 const firebaseConfig = {
   apiKey: "AIzaSyAOFY5GUONFgaorwLfaCE7imj5NbN0NN0U",
   authDomain: "wcms-bus-board.firebaseapp.com",
@@ -121,272 +214,190 @@ const firebaseConfig = {
   appId: "1:302977263459:web:cd3aaf4a1ff3fca36b1556",
   measurementId: "G-TP5DSZS0X2"
 };
-let db=null;
-try{ const app=firebase.initializeApp(firebaseConfig); db=firebase.firestore(); }
-catch(e){ console.error("Firebase init failed:", e); alert("Couldn't connect to Firebase."); }
 
-/* ===== Audio + Announcement Controls ===== */
-let audioEnabled=false,preferredVoice=null,audioCtx=null;
-let audioMuted=false;                       // manual mute (Quiet Mode)
-let bulkMuteCounter=0;                      // auto-mute during bulk ops
-let speakQueue=[]; let speakBusy=false;
-const quietChip=document.getElementById('quietChip');
+let db=null, auth=null, currentUser=null, currentIsAdmin=false, adminUnsub=null;
+try{
+  const app=firebase.initializeApp(firebaseConfig);
+  db=firebase.firestore();
+  auth=firebase.auth();
+}catch(e){ console.error("Firebase init failed:", e); alert("Firebase did not connect. Check your config."); }
 
-function isAudioAllowed(){ return audioEnabled && !audioMuted && bulkMuteCounter===0; }
-function setQuietMode(on){
-  audioMuted = !!on;
-  quietChip.textContent = audioMuted ? "🔇 Quiet Mode: On" : "🔊 Quiet Mode: Off";
+let audioEnabled=false, preferredVoice=null, audioCtx=null;
+function getVoicesSafe(){try{const v=window.speechSynthesis?window.speechSynthesis.getVoices():[];return Array.isArray(v)?v:[]}catch{return[]}}
+function pickVoice(){const voices=getVoicesSafe();const prefs=["en-US","en_US","en-GB","en_GB"];let best=null;for(const p of prefs){const f=voices.find(v=>(v.lang||"").toLowerCase()===p.toLowerCase());if(f){best=f;break}}preferredVoice=best||voices[0]||null}
+function waitForVoices(timeoutMs=3000){return new Promise(resolve=>{if(!('speechSynthesis'in window))return resolve(false);if(getVoicesSafe().length)return resolve(true);let done=false;const timer=setTimeout(()=>{if(!done){done=true;resolve(getVoicesSafe().length>0)}},timeoutMs);window.speechSynthesis.onvoiceschanged=()=>{if(done)return;done=true;clearTimeout(timer);resolve(getVoicesSafe().length>0)}})}
+function primeSpeech(){if(!('speechSynthesis'in window))return;try{window.speechSynthesis.cancel();window.speechSynthesis.resume();const u=new SpeechSynthesisUtterance(" ");u.volume=0;u.rate=1;u.pitch=1;u.lang="en-US";if(preferredVoice)u.voice=preferredVoice;window.speechSynthesis.speak(u)}catch(e){}}
+async function enableSoundNow(){const gate=document.getElementById('soundGate');if(gate){gate.classList.add('hidden');setTimeout(()=>{if(gate)gate.style.display='none'},260)}try{audioEnabled=true;const Ctx=window.AudioContext||window.webkitAudioContext;if(Ctx&&!audioCtx)audioCtx=new Ctx();if(audioCtx&&audioCtx.state==='suspended'){try{await audioCtx.resume()}catch{}}await waitForVoices(2500);pickVoice();primeSpeech()}catch(err){console.error('Sound enable error:',err)}}
+document.getElementById('soundGate').addEventListener('click', enableSoundNow);
+document.getElementById('gateBtn').addEventListener('click', function(e){e.stopPropagation();enableSoundNow()});
+function speakify(label){let t=String(label);t=t.replace(/\//g,' slash ').replace(/&/g,' and ').replace(/-/g,' dash ').replace(/\+/g,' plus ');return t.replace(/\s+/g,' ').trim()}
+async function chime(freq1,freq2,vol,dur){if(!audioEnabled)return;try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!audioCtx&&Ctx)audioCtx=new Ctx();if(!audioCtx)return;if(audioCtx.state==='suspended'){try{await audioCtx.resume()}catch{}}const o1=audioCtx.createOscillator(),o2=audioCtx.createOscillator(),g=audioCtx.createGain();o1.type='triangle';o2.type='sine';o1.frequency.setValueAtTime(freq1,audioCtx.currentTime);o2.frequency.setValueAtTime(freq2,audioCtx.currentTime);g.gain.setValueAtTime(0.0001,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(vol,audioCtx.currentTime+0.03);g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+dur);o1.connect(g);o2.connect(g);g.connect(audioCtx.destination);o1.start();o2.start();o1.stop(audioCtx.currentTime+dur);o2.stop(audioCtx.currentTime+dur)}catch(e){}}
+function chimeArrival(){chime(1046.5,1568.0,1.0,1.5)}
+function chimeDepart(){chime(659.25,440.0,0.9,0.8)}
+function speak(text){if(!audioEnabled||!('speechSynthesis'in window))return;try{window.speechSynthesis.cancel();window.speechSynthesis.resume();const u=new SpeechSynthesisUtterance(text);u.rate=1.0;u.pitch=1.0;u.lang='en-US';if(preferredVoice)u.voice=preferredVoice;let tried=false;u.onerror=()=>{if(!tried){tried=true;setTimeout(()=>{window.speechSynthesis.resume();window.speechSynthesis.speak(u)},120)}};setTimeout(()=>{window.speechSynthesis.resume();window.speechSynthesis.speak(u)},10)}catch(e){}}
+
+const ACTIVE='wcms_bus_board';
+const DEPARTED='wcms_bus_departed';
+const ADMINS='wcms_admins';
+
+const adminPanel=document.getElementById('adminPanel');
+const adminStatus=document.getElementById('adminStatus');
+const googleBtn=document.getElementById('googleBtn');
+const signOutBtn=document.getElementById('signOutBtn');
+const adminSettingsBtn=document.getElementById('adminSettingsBtn');
+const board=document.getElementById('board');
+const departedList=document.getElementById('departedList');
+const busInput=document.getElementById('busInput');
+const liveMeta=document.getElementById('liveMeta');
+
+function normalizeEmail(email){return String(email||'').trim().toLowerCase()}
+function isOwnerEmail(email){return normalizeEmail(email)===normalizeEmail(OWNER_EMAIL)}
+async function checkAdmin(user){
+  if(!user || !user.email) return false;
+  const email=normalizeEmail(user.email);
+  if(isOwnerEmail(email)) return true;
+  const doc=await db.collection(ADMINS).doc(email).get();
+  return doc.exists;
 }
-quietChip.addEventListener('click', ()=> setQuietMode(!audioMuted));
-function bulkMute(on){ bulkMuteCounter = Math.max(0, bulkMuteCounter + (on?1:-1)); }
-
-function getVoicesSafe(){try{const v=window.speechSynthesis?window.speechSynthesis.getVoices():[];return Array.isArray(v)?v:[];}catch{return[];}}
-function pickVoice(){const voices=getVoicesSafe();const prefs=["en-US","en_US","en-GB","en_GB"];let best=null;for(const p of prefs){const f=voices.find(v=>(v.lang||"").toLowerCase()===p.toLowerCase());if(f){best=f;break;}}preferredVoice=best||voices[0]||null;}
-function waitForVoices(t=3000){return new Promise(r=>{if(!('speechSynthesis'in window))return r(false);if(getVoicesSafe().length)return r(true);let done=false;const timer=setTimeout(()=>{if(!done){done=true;r(getVoicesSafe().length>0);}},t);window.speechSynthesis.onvoiceschanged=()=>{if(done)return;done=true;clearTimeout(timer);r(getVoicesSafe().length>0);};});}
-async function unlockAudioContext(){ const Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return false; if(!audioCtx) audioCtx=new Ctx(); if(audioCtx.state==='suspended'){ try{ await audioCtx.resume(); }catch{} } try{ const buffer=audioCtx.createBuffer(1,1,22050); const src=audioCtx.createBufferSource(); src.buffer=buffer; src.connect(audioCtx.destination); src.start(0);}catch{} return audioCtx.state==='running'; }
-function hideGate(){ const gate=document.getElementById('soundGate'); if(!gate) return; gate.classList.add('hidden'); setTimeout(()=>{ if(gate) gate.style.display='none'; }, 260); }
-async function enableSoundNow(){ try{ hideGate(); audioEnabled=true; await unlockAudioContext(); await waitForVoices(2500); pickVoice(); const t=document.getElementById('testChime'); if(t) t.style.display='inline-block'; if('speechSynthesis'in window){ try{ window.speechSynthesis.cancel(); window.speechSynthesis.resume(); const u=new SpeechSynthesisUtterance(" "); u.volume=0; u.lang="en-US"; if(preferredVoice)u.voice=preferredVoice; window.speechSynthesis.speak(u);}catch{} } }catch(e){ console.error('Sound enable error:', e); } }
-window.__enableSoundNow = enableSoundNow;
-window.__testChime = ()=> chime(880,1320,1.0,0.8);
-
-function speakify(label){ let t=String(label); return t.replace(/\//g,' slash ').replace(/&/g,' and ').replace(/-/g,' dash ').replace(/\+/g,' plus ').replace(/\s+/g,' ').trim(); }
-async function chime(f1,f2,v,d){ if(!isAudioAllowed()) return; try{ await unlockAudioContext(); const o1=audioCtx.createOscillator(),o2=audioCtx.createOscillator(),g=audioCtx.createGain(); o1.type='triangle'; o2.type='sine'; o1.frequency.setValueAtTime(f1,audioCtx.currentTime); o2.frequency.setValueAtTime(f2,audioCtx.currentTime); g.gain.setValueAtTime(0.0001,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(v,audioCtx.currentTime+0.03); g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+d); o1.connect(g); o2.connect(g); g.connect(audioCtx.destination); o1.start(); o2.start(); o1.stop(audioCtx.currentTime+d); o2.stop(audioCtx.currentTime+d); }catch{} }
-function speakNow(text){ if(!isAudioAllowed() || !('speechSynthesis' in window)) return; try{ window.speechSynthesis.cancel(); window.speechSynthesis.resume(); const u=new SpeechSynthesisUtterance(text); u.lang='en-US'; if(preferredVoice)u.voice=preferredVoice; window.speechSynthesis.speak(u);}catch{} }
-function enqueueSpeak(text){ speakQueue.push(text); drainSpeakQueue(); }
-function drainSpeakQueue(){ if(speakBusy || !isAudioAllowed()) return; const next = speakQueue.shift(); if(!next) return; speakBusy=true; chime(1046.5,1568.0,1.0,1.2); setTimeout(()=>{ speakNow(next); setTimeout(()=>{ speakBusy=false; drainSpeakQueue(); }, 1200); }, 180); }
-
-/* ===== Admin (Auth + local 1h unlock) ===== */
-var adminPanel=document.getElementById('adminPanel'),
-    adminStatus=document.getElementById('adminStatus'),
-    adminLoginBtn=document.getElementById('adminLoginBtn'),
-    lockBtn=document.getElementById('lockBtn'),
-    sessionTimeLeft=document.getElementById('sessionTimeLeft');
-
-function isAdmin(){ var v=localStorage.getItem('bus_admin_until'); return v && Number(v)>Date.now(); }
-function setAdminFor1Hour(){ var until=Date.now()+3600000; localStorage.setItem('bus_admin_until', String(until)); updateAdminUI(); }
-function clearAdmin(){ localStorage.removeItem('bus_admin_until'); updateAdminUI(); }
-function updateAdminUI(){ var a=isAdmin(); adminPanel.classList.toggle('hidden', !a); adminLoginBtn.classList.toggle('hidden', a); adminStatus.textContent = a ? 'Admin' : 'Viewer'; }
-adminLoginBtn.addEventListener('click', async ()=>{
-  const email = prompt('Admin email:'); if(!email) return;
-  const pass  = prompt('Password:');    if(!pass) return;
-  try{ await firebase.auth().signInWithEmailAndPassword(email, pass); setAdminFor1Hour(); alert('Admin unlocked.'); }
-  catch(e){ alert('Sign-in failed: ' + (e && e.message ? e.message : e)); }
+async function updateAuthUI(){
+  currentIsAdmin = await checkAdmin(currentUser);
+  const signedIn = !!currentUser;
+  googleBtn.classList.toggle('hidden', signedIn);
+  signOutBtn.classList.toggle('hidden', !signedIn);
+  adminPanel.classList.toggle('hidden', !currentIsAdmin);
+  adminSettingsBtn.classList.toggle('hidden', !currentIsAdmin);
+  adminStatus.textContent = currentIsAdmin ? `✅ Admin: ${currentUser.email}` : signedIn ? `👤 Viewer: ${currentUser.email}` : '👤 Viewer';
+}
+googleBtn.addEventListener('click', async ()=>{
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try{ await auth.signInWithPopup(provider); }
+  catch(e){ console.error(e); alert('Google sign-in failed. Make sure Google sign-in is enabled in Firebase Authentication.'); }
 });
-lockBtn && lockBtn.addEventListener('click', clearAdmin);
-setInterval(function(){
-  var v=localStorage.getItem('bus_admin_until');
-  if(!v){ sessionTimeLeft.textContent='Locked'; return; }
-  var ms=Number(v)-Date.now();
-  if(ms<=0){ clearAdmin(); sessionTimeLeft.textContent='Locked'; return; }
-  var m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000);
-  sessionTimeLeft.textContent='Admin: '+m+'m '+s+'s';
-},1000);
-updateAdminUI();
-// Reflect signed-in user
-if(firebase && firebase.auth){
-  firebase.auth().onAuthStateChanged(u=>{
-    if(u && u.email){ adminStatus.textContent='Admin ('+u.email+')'; }
-    else { adminStatus.textContent='Viewer'; }
-  });
-}
+signOutBtn.addEventListener('click', ()=>auth.signOut());
+auth.onAuthStateChanged(async user=>{
+  currentUser=user;
+  await updateAuthUI();
+  if(adminUnsub){adminUnsub();adminUnsub=null}
+  if(currentIsAdmin){
+    adminUnsub=db.collection(ADMINS).onSnapshot(()=>{ if(!document.getElementById('adminModal').classList.contains('hidden')) loadAdminList(); });
+  }
+});
 
-/* ===== Firestore Collections & UI ===== */
-const ACTIVE='wcms_bus_board', DEPARTED='wcms_bus_departed';
-var board=document.getElementById('board'),
-    departedList=document.getElementById('departedList'),
-    busInput=document.getElementById('busInput'),
-    addBtn=document.getElementById('addBtn'),
-    clearAllBtn=document.getElementById('clearAllBtn'),
-    liveMeta=document.getElementById('liveMeta');
+function requireAdmin(){
+  if(!currentIsAdmin){ alert('Please sign in with an approved admin Google account.'); return false; }
+  return true;
+}
 
 function makeActiveTile(id,label){
-  const wrap=document.createElement('div'); wrap.className='bus';
-  const btn=document.createElement('button'); btn.className='inline-btn';
-  btn.setAttribute('data-doc', id); btn.setAttribute('data-label', encodeURIComponent(label));
-  btn.textContent='Remove'; wrap.appendChild(btn);
-  wrap.appendChild(document.createTextNode(label));
-  return wrap;
+  const wrap=document.createElement('div');wrap.className='bus';
+  const btn=document.createElement('button');btn.className='inline-btn';btn.setAttribute('data-doc',id);btn.setAttribute('data-label',encodeURIComponent(label));btn.textContent='Remove';
+  if(!currentIsAdmin) btn.classList.add('hidden');
+  wrap.appendChild(btn);wrap.appendChild(document.createTextNode(label));return wrap;
 }
-function renderActive(items){ board.innerHTML=''; items.forEach(it=> board.appendChild(makeActiveTile(it.id,it.display))); }
-function renderDeparted(items){
-  departedList.innerHTML=''; items.forEach(n=>{
-    const e=document.createElement('div'); e.className='departed-item'; e.textContent=n; departedList.appendChild(e);
-  });
-}
+function renderActive(items){board.innerHTML='';items.forEach(it=>board.appendChild(makeActiveTile(it.id,it.display)))}
+function renderDeparted(items){departedList.innerHTML='';items.forEach(n=>{const e=document.createElement('div');e.className='departed-item';e.textContent=n;departedList.appendChild(e)})}
 
 let activeLoaded=false, departedLoaded=false;
 if(db){
-  db.collection(ACTIVE).onSnapshot(function(snap){
-    liveMeta.textContent='Cloud Firestore · '+snap.size+' entries';
-    const list = snap.docs.map(d=>{
-      const data=d.data()||{};
-      return { id:d.id, display:data.number ?? d.id, orderMs: typeof data.orderMs==='number'?data.orderMs:0 };
-    }).sort((a,b)=> b.orderMs - a.orderMs);
-    renderActive(list);
-
-    if(!activeLoaded){ activeLoaded=true; return; }
-    const added = snap.docChanges().filter(c=>c.type==='added').map(c=> (c.doc.data().number ?? c.doc.id));
-    if(added.length){ const spoken = added.map(s=>speakify(s)).join(', '); enqueueSpeak('Bus '+spoken+' now boarding'); }
+  db.collection(ACTIVE).onSnapshot(snap=>{
+    liveMeta.textContent='● Live Updates · '+snap.size+' entries';
+    const list=snap.docs.map(d=>{const data=d.data()||{};return {id:d.id,display:data.number??d.id,orderMs:typeof data.orderMs==='number'?data.orderMs:0,ts:data.createdAt?.toMillis?data.createdAt.toMillis():0,cs:typeof data.createdAtClient==='number'?data.createdAtClient:0}});
+    list.sort((a,b)=>(b.orderMs-a.orderMs)||(b.ts-a.ts)||(b.cs-a.cs));
+    renderActive(list.map(x=>({id:x.id,display:x.display})));
+    if(!activeLoaded){activeLoaded=true;return}
+    const added=snap.docChanges().filter(c=>c.type==='added').map(c=>(c.doc.data().number??c.doc.id));
+    if(added.length){const spoken=added.map(s=>speakify(s)).join(', ');chimeArrival();setTimeout(()=>speak('Bus '+spoken+' is now boarding'),200)}
   });
-
-  db.collection(DEPARTED).onSnapshot(function(snap){
-    const list = snap.docs.map(d=>{
-      const data=d.data()||{};
-      return { display:data.number ?? d.id, orderMs: typeof data.departOrderMs==='number'?data.departOrderMs:0 };
-    }).sort((a,b)=> b.orderMs - a.orderMs);
+  db.collection(DEPARTED).onSnapshot(snap=>{
+    const list=snap.docs.map(d=>{const data=d.data()||{};return {display:data.number||d.id,orderMs:typeof data.departOrderMs==='number'?data.departOrderMs:0,ts:data.departedAt?.toMillis?data.departedAt.toMillis():0,cs:typeof data.departedAtClient==='number'?data.departedAtClient:0}});
+    list.sort((a,b)=>(b.orderMs-a.orderMs)||(b.ts-a.ts)||(b.cs-a.cs));
     renderDeparted(list.map(x=>x.display));
-
-    if(!departedLoaded){ departedLoaded=true; return; }
-    const added = snap.docChanges().filter(c=>c.type==='added').map(c=> (c.doc.data().number ?? c.doc.id));
-    if(added.length){ const spoken = added.map(s=>speakify(s)).join(', '); // different chime for depart
-      if(isAudioAllowed()){ chime(659.25,440.0,0.9,0.8); setTimeout(()=> speakNow('Bus '+spoken+' has departed'), 120); }
-    }
+    if(!departedLoaded){departedLoaded=true;return}
+    const added=snap.docChanges().filter(c=>c.type==='added').map(c=>(c.doc.data().number||c.doc.id));
+    if(added.length){const spoken=added.map(s=>speakify(s)).join(', ');chimeDepart();setTimeout(()=>speak('Bus '+spoken+' has departed'),120)}
   });
 }
 
-/* ===== Helpers ===== */
-function tokenize(input){ return String(input||'').split(',').map(s=>s.trim()).filter(Boolean); }
-function toKey(s){ return s.trim().toLowerCase(); }
-
-/* ===== Adds ===== */
+function tokenize(input){return String(input||'').split(',').map(s=>s.trim()).filter(Boolean)}
+function toKey(s){return s.trim().toLowerCase()}
 async function addFromStringCloud(str){
-  const tokens = tokenize(str); if(!tokens.length) return;
-  const ops = []; let base = Date.now();
+  if(!requireAdmin()) return;
+  const tokens=tokenize(str); if(!tokens.length)return;
+  const ops=[]; let base=Date.now();
   for(let i=0;i<tokens.length;i++){
-    const display = tokens[i]; const key = toKey(display);
-    const snap = await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
+    const display=tokens[i], key=toKey(display);
+    const snap=await db.collection(ACTIVE).where('numberLower','==',key).limit(1).get();
     if(snap.empty){
-      const orderMs = base + i;
-      ops.push( db.collection(ACTIVE).add({
-        number: display, numberLower: key, orderMs,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        createdAtClient: orderMs
-      }));
+      const orderMs=base+i;
+      ops.push(db.collection(ACTIVE).add({number:display,numberLower:key,orderMs,createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdAtClient:orderMs}));
     }
   }
-  if(ops.length){
-    try{ await Promise.all(ops); }catch(e){
-      console.error('Add failed',e);
-      alert('Add failed. Are you signed in with an admin email and do rules allow writes?');
-    }
-  }
+  if(ops.length){try{await Promise.all(ops)}catch(e){console.error(e);alert('Could not add. Check sign-in/admin permissions and Firestore rules.')}}
   busInput.value='';
 }
-
-/* ===== Depart / Remove ===== */
 async function moveDocToDepartedAndDelete(ref){
-  const now = Date.now();
+  const now=Date.now();
   await db.runTransaction(async tx=>{
-    const snap = await tx.get(ref);
-    if(!snap.exists) return;
-    const data = snap.data() || {};
-    const label = data.number ?? snap.id;
-    tx.set(db.collection(DEPARTED).doc(label+'-'+now), {
-      number: label, departOrderMs: now,
-      departedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      departedAtClient: now
-    });
+    const snap=await tx.get(ref); if(!snap.exists)return;
+    const data=snap.data()||{}; const label=data.number??snap.id;
+    tx.set(db.collection(DEPARTED).doc(label+'-'+now),{number:label,departOrderMs:now,departedAt:firebase.firestore.FieldValue.serverTimestamp(),departedAtClient:now});
     tx.delete(ref);
   });
 }
-async function departByDocId(docId){ const ref = db.collection(ACTIVE).doc(docId); await moveDocToDepartedAndDelete(ref); }
+async function departByDocId(docId){if(!requireAdmin())return;await moveDocToDepartedAndDelete(db.collection(ACTIVE).doc(docId))}
 async function departByLookup(label){
-  const key = toKey(label);
-  let qs = await db.collection(ACTIVE).where('numberLower','==',key).limit(5).get();
-  if(qs.empty){ qs = await db.collection(ACTIVE).where('number','==',label).limit(5).get(); }
-  if(qs.empty){
-    const ref = db.collection(ACTIVE).doc(label); // legacy id fallback
-    try{ await moveDocToDepartedAndDelete(ref); }catch(e){}
-    return;
-  }
-  const ops=[]; qs.forEach(d=> ops.push(moveDocToDepartedAndDelete(db.collection(ACTIVE).doc(d.id)))); await Promise.all(ops);
+  if(!requireAdmin())return;
+  const key=toKey(label); let qs=await db.collection(ACTIVE).where('numberLower','==',key).limit(5).get();
+  if(qs.empty) qs=await db.collection(ACTIVE).where('number','==',label).limit(5).get();
+  if(qs.empty){try{await moveDocToDepartedAndDelete(db.collection(ACTIVE).doc(label))}catch(e){};return}
+  const ops=[]; qs.forEach(d=>ops.push(moveDocToDepartedAndDelete(db.collection(ACTIVE).doc(d.id)))); await Promise.all(ops);
+}
+function clearAllCloud(){
+  if(!requireAdmin())return;
+  function deleteAll(coll){return db.collection(coll).get().then(q=>{const ops=[];q.forEach(d=>ops.push(db.collection(coll).doc(d.id).delete()));return Promise.all(ops)})}
+  Promise.all([deleteAll(ACTIVE),deleteAll(DEPARTED)]).catch(e=>{console.error(e);alert('Clear failed. Check admin permissions.')});
 }
 
-/* ===== Paged, Batched Clear (auto-muted) ===== */
-async function deleteCollectionPaged(collPath, batchSize=300){
-  let total = 0;
-  while(true){
-    const snap = await db.collection(collPath)
-      .orderBy(firebase.firestore.FieldPath.documentId())
-      .limit(batchSize)
-      .get();
+document.getElementById('addBtn').addEventListener('click',()=>addFromStringCloud(busInput.value));
+busInput.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();addFromStringCloud(busInput.value)}});
+busInput.addEventListener('input',()=>{const v=busInput.value;if(v.endsWith(',')&&v.trim().length>1){addFromStringCloud(v.slice(0,-1));busInput.value=''}});
+document.addEventListener('click',async e=>{const t=e.target;if(!t||!t.hasAttribute('data-doc'))return;const docId=t.getAttribute('data-doc');const label=decodeURIComponent(t.getAttribute('data-label')||'');try{await departByDocId(docId)}catch(_){await departByLookup(label)}});
+document.getElementById('clearAllBtn').addEventListener('click',()=>{if(confirm('Clear all entries and departed?'))clearAllCloud()});
 
-    if (snap.empty) break;
-
-    const batch = db.batch();
-    snap.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-    total += snap.size;
-
-    await new Promise(r=>setTimeout(r,40));
-  }
-  return total;
-}
-
-async function clearAllCloud(){
-  if(!isAdmin()){
-    alert('Unlock admin first (Admin Login). You must be signed in with an admin email.');
-    return;
-  }
-  if(!confirm('Clear ALL current and departed entries? This cannot be undone.')) return;
-
-  clearAllBtn.disabled = true;
-  clearAllBtn.textContent = 'Clearing...';
-
-  bulkMute(true);           // 🔇 auto-mute announcements during the whole clear
-  const prevMuted = audioMuted; setQuietMode(true);
-
+const adminModal=document.getElementById('adminModal');
+const adminList=document.getElementById('adminList');
+document.getElementById('adminSettingsBtn').addEventListener('click',()=>{adminModal.classList.remove('hidden');loadAdminList()});
+document.getElementById('closeAdminModal').addEventListener('click',()=>adminModal.classList.add('hidden'));
+document.getElementById('addAdminBtn').addEventListener('click',async()=>{
+  if(!requireAdmin())return;
+  const email=normalizeEmail(document.getElementById('newAdminEmail').value);
+  if(!email || !email.includes('@')){alert('Enter a valid email.');return}
   try{
-    const [aCount, dCount] = await Promise.all([
-      deleteCollectionPaged(ACTIVE, 400),
-      deleteCollectionPaged(DEPARTED, 400),
-    ]);
-    alert(`Cleared ${aCount} active + ${dCount} departed entries.`);
-  }catch(e){
-    console.error('Clear failed', e);
-    const msg = (e && e.message) ? e.message : String(e);
-    if (/PERMISSION_DENIED|Missing or insufficient permissions/i.test(msg)) {
-      alert('Clear failed: permissions. Make sure:\n• You used Admin Login (Firebase Auth)\n• Your Firestore rules allow admin deletes\n• Your site domain is in Auth > Settings > Authorized domains');
-    } else {
-      alert('Clear failed: '+ msg);
+    await db.collection(ADMINS).doc(email).set({email,addedBy:currentUser.email,addedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    document.getElementById('newAdminEmail').value='';
+    loadAdminList();
+  }catch(e){console.error(e);alert('Could not add admin. Check Firestore rules.')}
+});
+async function loadAdminList(){
+  adminList.innerHTML='<p class="muted">Loading admins...</p>';
+  try{
+    const qs=await db.collection(ADMINS).get();
+    adminList.innerHTML='';
+    const owner=document.createElement('div'); owner.className='adminItem';
+    owner.innerHTML=`<div><strong>${OWNER_EMAIL}</strong><div class="emailSmall">Owner · Always allowed</div></div><span class="chip">You</span>`;
+    adminList.appendChild(owner);
+    if(qs.empty){
+      const p=document.createElement('p');p.className='muted';p.textContent='No added administrators yet.';adminList.appendChild(p);
     }
-  }finally{
-    clearAllBtn.disabled = false;
-    clearAllBtn.textContent = 'Clear All';
-    bulkMute(false);        // release auto-mute
-    setQuietMode(prevMuted);// restore manual mute state
-  }
+    qs.forEach(doc=>{
+      const data=doc.data()||{}; const email=data.email||doc.id;
+      const row=document.createElement('div');row.className='adminItem';
+      const left=document.createElement('div');left.innerHTML=`<strong>${email}</strong><div class="emailSmall">Can add/remove buses and manage admins</div>`;
+      const del=document.createElement('button');del.className='small danger';del.textContent='Remove';del.onclick=async()=>{if(confirm('Remove '+email+' as admin?')){await db.collection(ADMINS).doc(doc.id).delete();loadAdminList()}};
+      row.appendChild(left);row.appendChild(del);adminList.appendChild(row);
+    });
+  }catch(e){console.error(e);adminList.innerHTML='<p class="muted">Could not load admins. Check rules and sign-in.</p>'}
 }
-
-/* ===== Handlers ===== */
-document.getElementById('addBtn').addEventListener('click', function(){
-  if(!isAdmin()) return alert('Unlock admin first');
-  addFromStringCloud(busInput.value);
-});
-busInput.addEventListener('keydown', function(e){
-  if(!isAdmin()) return;
-  if(e.key==='Enter' || e.key===','){ e.preventDefault(); addFromStringCloud(busInput.value); }
-});
-busInput.addEventListener('input', function(){
-  if(!isAdmin()) return;
-  const v = busInput.value;
-  if(v.endsWith(',') && v.trim().length>1){ addFromStringCloud(v.slice(0,-1)); busInput.value=''; }
-});
-document.addEventListener('click', async function(e){
-  const t=e.target; if(!t || !t.hasAttribute('data-doc')) return;
-  if(!isAdmin()) return alert('Unlock admin first');
-  const docId=t.getAttribute('data-doc'); const label=decodeURIComponent(t.getAttribute('data-label')||'');
-  try{ await departByDocId(docId); }catch(_){ await departByLookup(label); }
-});
-document.getElementById('clearAllBtn').addEventListener('click', clearAllCloud);
-
-// Also bind after DOM ready just in case
-document.addEventListener('DOMContentLoaded', ()=> {
-  const g=document.getElementById('soundGate');
-  const b=document.getElementById('gateBtn');
-  if(g) g.addEventListener('click', enableSoundNow, {once:true});
-  if(b) b.addEventListener('click', (e)=>{e.stopPropagation(); enableSoundNow();}, {once:true});
-});
 </script>
 </body>
 </html>
